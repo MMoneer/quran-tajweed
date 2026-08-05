@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مصحف التجويد الإلكتروني | Tajweed Mushaf</title>
+  <meta name="description" content="مصحف التجويد الإلكتروني التفاعلي بترميز الألوان مع إمكانية تعديل وتخصيص ألوان التجويد بالكامل">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Amiri:ital,wght@0,400;0,700;1,400&family=Outfit:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- App Container -->
+  <div class="app-container">
+    
+    <!-- Top Navigation Bar -->
+    <header class="app-header">
+      <div class="header-content">
+        <div class="header-right">
+          <a href="#" class="logo-area">
+            <span class="logo-icon"><i class="fa-solid fa-quran"></i></span>
+            <div class="logo-text">
+              <h1>مُصحَف التّجْوِيد</h1>
+              <p>Tajweed Mushaf</p>
+            </div>
+          </a>
+          <button id="btn-index" class="btn-icon" title="الفهرس">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+        </div>
+        
+        <div class="header-center" id="header-surah-info">
+          <!-- Will show current surah details when in Surah view -->
+        </div>
+
+        <div class="header-left">
+          <button id="btn-tajweed-rules" class="btn-icon" title="أحكام التجويد">
+            <i class="fa-solid fa-book-open"></i>
+          </button>
+          <button id="btn-theme" class="btn-icon" title="تبديل المظهر">
+            <i class="fa-solid fa-moon"></i>
+          </button>
+          <button id="btn-settings" class="btn-icon" title="إعدادات الألوان والتجويد">
+            <i class="fa-solid fa-palette"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Fixed Navigation Bar (outside view-section to avoid transform breaking position:fixed) -->
+    <nav id="fixed-nav" class="fixed-nav">
+      <div class="fixed-nav-inner">
+        <!-- Surah Navigation -->
+        <div class="nav-group">
+          <button id="btn-prev-surah" class="btn-nav" title="السورة السابقة">
+            <i class="fa-solid fa-chevron-right"></i>
+            <span>السورة السابقة</span>
+          </button>
+          <button id="btn-next-surah" class="btn-nav" title="السورة التالية">
+            <span>السورة التالية</span>
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
+        </div>
+
+        <!-- Page Navigation -->
+        <div class="nav-group nav-group-page">
+          <label for="page-number-input">انتقل للصفحة:</label>
+          <div class="page-input-wrapper">
+            <div class="page-input-field">
+              <input type="number" id="page-number-input" min="1" max="604" placeholder="رقم الصفحة">
+              <div class="page-spinner-btns">
+                <button class="page-spinner-btn" data-dir="up" aria-label="الصفحة التالية"><i class="fa-solid fa-caret-up"></i></button>
+                <button class="page-spinner-btn" data-dir="down" aria-label="الصفحة السابقة"><i class="fa-solid fa-caret-down"></i></button>
+              </div>
+            </div>
+            <button id="btn-go-page" class="btn-icon-small" title="اذهب"><i class="fa-solid fa-arrow-left"></i></button>
+          </div>
+        </div>
+
+        <!-- Part Navigation -->
+        <div class="nav-group nav-group-part">
+          <label for="part-number-select">انتقل للجزء:</label>
+          <div class="part-input-wrapper">
+            <select id="part-number-select">
+              <option value="">الجزء</option>
+            </select>
+            <button id="btn-go-part" class="btn-icon-small" title="اذهب"><i class="fa-solid fa-arrow-left"></i></button>
+          </div>
+        </div>
+
+        <!-- Font Size Controls -->
+        <div class="nav-group nav-group-font">
+          <div class="reader-adjustments">
+            <button id="btn-increase-font" class="btn-icon-small" title="تكبير الخط"><i class="fa-solid fa-plus"></i></button>
+            <span class="font-size-indicator" id="font-size-value">100%</span>
+            <button id="btn-decrease-font" class="btn-icon-small" title="تصغير الخط"><i class="fa-solid fa-minus"></i></button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      
+      <!-- Surah Index View (Active by default) -->
+      <section id="surah-index-section" class="view-section active">
+        <div class="search-banner">
+          <div class="search-wrapper">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="surah-search" placeholder="ابحث عن سورة بالاسم، الرقم، أو مكان النزول...">
+            <button id="clear-search" class="btn-clear"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+        
+        <div class="surah-grid-container">
+          <div class="index-loading" id="index-loading">
+            <div class="spinner"></div>
+            <p>جاري تحميل قائمة السور...</p>
+          </div>
+          <div class="surah-grid" id="surah-grid"></div>
+        </div>
+      </section>
+
+      <!-- Surah Reader View -->
+      <section id="surah-reader-section" class="view-section">
+        <div class="surah-viewer-card">
+          <div class="reader-loading" id="reader-loading">
+            <div class="spinner"></div>
+            <p>جاري تحميل السورة المباركة...</p>
+          </div>
+          
+          <div class="surah-content-container" id="surah-content-container">
+            <!-- Surah Content goes here -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Tajweed Rules Reference View -->
+      <section id="tajweed-rules-section" class="view-section">
+        <div class="tajweed-rules-container" id="tajweed-rules-container">
+          <!-- Rules content generated dynamically -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Audio Player Bar (Fixed Bottom) -->
+    <div class="audio-player hidden" id="audio-player">
+      <div class="player-header">
+        <span class="player-surah-name" id="player-surah-name">سورة الفاتحة</span>
+        <div class="player-range-selector">
+          <input type="number" id="range-start" class="range-input" min="1" placeholder="من" title="آية البداية">
+          <span class="range-separator">-</span>
+          <input type="number" id="range-end" class="range-input" min="1" placeholder="إلى" title="آية النهاية">
+        </div>
+        <span class="player-ayah-info" id="player-ayah-info">الآية ١/٧</span>
+      </div>
+      <div class="player-progress">
+        <span class="player-time-current" id="player-time-current">٠٠:٠٠</span>
+        <div class="progress-bar-container" id="progress-bar-container">
+          <div class="progress-bar-fill" id="progress-bar-fill"></div>
+        </div>
+        <span class="player-time-duration" id="player-time-duration">٠٠:٠٠</span>
+      </div>
+      <div class="player-controls">
+        <button class="btn-player" id="btn-forward" title="تقديم 5 ثواني"><i class="fa-solid fa-rotate-right"></i></button>
+        <button class="btn-player" id="btn-next-ayah" title="الآية التالية"><i class="fa-solid fa-forward-step"></i></button>
+        <button class="btn-player btn-play" id="btn-play" title="تشغيل / إيقاف"><i class="fa-solid fa-play"></i></button>
+        <button class="btn-player" id="btn-rewind" title="ترجيع 5 ثواني"><i class="fa-solid fa-rotate-left"></i></button>
+        <button class="btn-player" id="btn-prev-ayah" title="الآية السابقة"><i class="fa-solid fa-backward-step"></i></button>
+        <div class="volume-control">
+          <input type="range" class="volume-slider" id="volume-slider" min="0" max="1" step="0.05" value="0.8">
+          <button class="btn-player" id="btn-volume" title="كتم / إلغاء الكتم"><i class="fa-solid fa-volume-high"></i></button>
+        </div>
+        <button class="btn-player" id="btn-play-mode" title="الآية الحالية فقط"><i class="fa-solid fa-1"></i></button>
+        <button class="btn-player" id="btn-repeat" title="تشغيل متكرر"><i class="fa-solid fa-repeat"></i></button>
+      </div>
+      <audio id="audio-element" preload="none"></audio>
+    </div>
+
+    <!-- Right Sidebar Drawer (Settings / Customizer) -->
+    <aside class="settings-drawer" id="settings-drawer">
+      <div class="drawer-header">
+        <h3><i class="fa-solid fa-palette"></i> إعدادات التجويد والألوان</h3>
+        <button id="btn-close-settings" class="btn-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      
+      <div class="drawer-body">
+        <div class="settings-group">
+          <h4>مظهر وتنسيق الصفحة</h4>
+          <div class="setting-item">
+            <label for="font-size-slider">حجم خط الآيات</label>
+            <div class="slider-container">
+              <input type="range" id="font-size-slider" min="20" max="60" value="30">
+              <span id="font-size-text">30px</span>
+            </div>
+          </div>
+          <div class="setting-item flex-between">
+            <label for="toggle-tajweed-active">تفعيل ألوان التجويد</label>
+            <label class="switch">
+              <input type="checkbox" id="toggle-tajweed-active" checked>
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="group-header">
+            <h4>ألوان أحكام التجويد</h4>
+            <button id="btn-reset-colors" class="btn-link" title="استعادة الألوان الافتراضية">
+              <i class="fa-solid fa-arrow-rotate-left"></i> افتراضي
+            </button>
+          </div>
+          
+          <!-- Tajweed Rules List -->
+          <div class="rules-categories">
+            
+            <!-- Category: Madd -->
+            <div class="category-panel">
+              <h5 class="category-title"><i class="fa-solid fa-lines-leaning"></i> أحكام المدود</h5>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-madda-normal)"></span>
+                <label for="color-madda-normal">مد طبيعي (حركتان)</label>
+                <input type="color" id="color-madda-normal" data-rule="madda-normal">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-madda-permissible)"></span>
+                <label for="color-madda-permissible">مد العارض للسكون / مد اللين (2 / 4 / 6 حركات)</label>
+                <input type="color" id="color-madda-permissible" data-rule="madda-permissible">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-madda-obligatory-monfasel)"></span>
+                <label for="color-madda-obligatory-monfasel">مد جائز منفصل (4 / 5 حركات)</label>
+                <input type="color" id="color-madda-obligatory-monfasel" data-rule="madda-obligatory-monfasel">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-madda-obligatory)"></span>
+                <label for="color-madda-obligatory">مد واجب متصل (4 / 5 حركات)</label>
+                <input type="color" id="color-madda-obligatory" data-rule="madda-obligatory">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-madda-necessary)"></span>
+                <label for="color-madda-necessary">مد لازم (6 حركات وجوباً)</label>
+                <input type="color" id="color-madda-necessary" data-rule="madda-necessary">
+              </div>
+            </div>
+
+            <!-- Category: Noon & Meem Sakinah -->
+            <div class="category-panel">
+              <h5 class="category-title"><i class="fa-solid fa-comment-nodes"></i> أحكام النون والميم الساكنة والتنوين</h5>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-ghunnah)"></span>
+                <label for="color-ghunnah">غنة</label>
+                <input type="color" id="color-ghunnah" data-rule="ghunnah">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-ikhafa)"></span>
+                <label for="color-ikhafa">إخفاء</label>
+                <input type="color" id="color-ikhafa" data-rule="ikhafa">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-ikhafa-shafawi)"></span>
+                <label for="color-ikhafa-shafawi">إخفاء شفوي</label>
+                <input type="color" id="color-ikhafa-shafawi" data-rule="ikhafa-shafawi">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-idgham-ghunnah)"></span>
+                <label for="color-idgham-ghunnah">إدغام بغنة</label>
+                <input type="color" id="color-idgham-ghunnah" data-rule="idgham-ghunnah">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-idgham-shafawi)"></span>
+                <label for="color-idgham-shafawi">إدغام شفوي</label>
+                <input type="color" id="color-idgham-shafawi" data-rule="idgham-shafawi">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-iqlab)"></span>
+                <label for="color-iqlab">إقلاب</label>
+                <input type="color" id="color-iqlab" data-rule="iqlab">
+              </div>
+            </div>
+
+            <!-- Category: Pronunciations & Silent Letters -->
+            <div class="category-panel">
+              <h5 class="category-title"><i class="fa-solid fa-volume-low"></i> مخارج الحروف والإدغام الآخر</h5>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-qalaqah)"></span>
+                <label for="color-qalaqah">قلقلة</label>
+                <input type="color" id="color-qalaqah" data-rule="qalaqah">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-tafkhim)"></span>
+                <label for="color-tafkhim">تفخيم</label>
+                <input type="color" id="color-tafkhim" data-rule="tafkhim">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-idgham-wo-ghunnah)"></span>
+                <label for="color-idgham-wo-ghunnah">إدغام بلا غنة</label>
+                <input type="color" id="color-idgham-wo-ghunnah" data-rule="idgham-wo-ghunnah">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-idgham-mutajanisayn)"></span>
+                <label for="color-idgham-mutajanisayn">إدغام متجانسين</label>
+                <input type="color" id="color-idgham-mutajanisayn" data-rule="idgham-mutajanisayn">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-ham-wasl)"></span>
+                <label for="color-ham-wasl">همزة وصل</label>
+                <input type="color" id="color-ham-wasl" data-rule="ham-wasl">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-laam-shamsiyah)"></span>
+                <label for="color-laam-shamsiyah">لام شمسية</label>
+                <input type="color" id="color-laam-shamsiyah" data-rule="laam-shamsiyah">
+              </div>
+              <div class="rule-color-item">
+                <span class="rule-dot" style="background-color: var(--color-slnt)"></span>
+                <label for="color-slnt">حرف صامت</label>
+                <input type="color" id="color-slnt" data-rule="slnt">
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="settings-group settings-group-data">
+          <h4>إدارة البيانات</h4>
+          <button id="btn-refetch-data" class="btn-refetch-data">
+            <i class="fa-solid fa-rotate"></i> إعادة جلب القرآن
+          </button>
+          <div id="refetch-progress-area" class="refetch-progress" style="display: none;">
+            <div class="refetch-progress-bar">
+              <div id="refetch-progress-fill" class="refetch-progress-fill"></div>
+            </div>
+            <p id="refetch-progress-text" class="refetch-progress-text"></p>
+          </div>
+        </div>
+      </div>
+    </aside>
+    
+    <!-- Drawer Overlay -->
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+
+    <!-- Scroll to top button -->
+    <button id="btn-scroll-top" class="btn-scroll-top" title="العودة للأعلى">
+      <i class="fa-solid fa-arrow-up"></i>
+    </button>
+
+    <!-- First-Run Wizard Modal -->
+    <div id="first-run-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-icon">
+          <i class="fa-solid fa-quran"></i>
+        </div>
+        <h2 class="modal-title">مصحف التجويد الإلكتروني</h2>
+        <p class="modal-subtitle">يجب تحميل بيانات القرآن الكريم أولاً</p>
+        <p class="modal-description">
+          سيقوم التطبيق بتحميل جميع بيانات القرآن الكريم من موقع Quran.com وتخزينها على جهازك للاستخدام بدون إنترنت. الحجم التقريبي: ~96 ميجابايت. قد يستغرق التحميل 5-10 دقائق.
+        </p>
+
+        <div class="modal-actions">
+          <button id="btn-wizard-import" class="modal-btn modal-btn-primary">
+            <i class="fa-solid fa-download"></i> تحميل القرآن
+          </button>
+          <button id="btn-wizard-online" class="modal-btn modal-btn-secondary">
+            استخدام إنترنت فقط
+          </button>
+        </div>
+
+        <div id="wizard-progress-area" class="modal-progress-area" style="display: none;">
+          <div class="modal-progress-bar">
+            <div id="wizard-progress-fill" class="modal-progress-fill"></div>
+          </div>
+          <p id="wizard-progress-text" class="modal-progress-text">جاري تحميل السور... 0/114</p>
+          <button id="btn-wizard-cancel" class="modal-btn modal-btn-cancel">إلغاء</button>
+        </div>
+
+        <div id="wizard-error-area" class="modal-error-area" style="display: none;">
+          <p id="wizard-error-text" class="modal-error-text"></p>
+          <button id="btn-wizard-retry" class="modal-btn modal-btn-primary">إعادة المحاولة</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Tajweed Legend Footer (Visible in Reader view) -->
+    <footer class="tajweed-legend" id="tajweed-legend">
+      <div class="legend-header">
+        <span>دليل ألوان التجويد (اضغط للتعديل)</span>
+        <i class="fa-solid fa-chevron-up toggle-legend-icon"></i>
+      </div>
+      <div class="legend-body">
+        <div class="legend-items" id="legend-items-container">
+          <!-- Will be dynamically generated -->
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- App scripts -->
+  <script src="data/juz-data.js"></script>
+  <script src="js/dataStore.js"></script>
+  <script src="js/dataImporter.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/surahIndex.js"></script>
+  <script src="js/pageRenderer.js"></script>
+  <script src="js/surahView.js"></script>
+  <script src="js/tajweedRules.js"></script>
+  <script src="js/audioPlayer.js"></script>
+  <script src="js/firstRunWizard.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

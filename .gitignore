@@ -1,0 +1,25 @@
+# Generated output
+graphify-out/
+
+# Documentation plans (temporary)
+docs/superpowers/
+
+# Build scripts (not part of app)
+scripts/
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Agent/IDE config
+.opencode/
+AGENTS.md
+
