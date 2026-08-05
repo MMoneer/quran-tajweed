@@ -73,11 +73,7 @@ quran.com/
 ├── fonts/
 │   ├── UthmanicHafs_V20.ttf
 │   └── UthmanicHafs_V22.ttf
-├── scripts/
-│   ├── fetch-surahs.js     # Fetch surah data from Quran.com API
-│   └── convert-to-js.js    # Convert JSON to JS for file:// support
-└── docs/
-    └── superpowers/        # Project documentation (specs, plans)
+└── docs/                   # Project documentation
 ```
 
 ---
@@ -110,13 +106,11 @@ Hash-based routing with three views:
 ### Data Flow
 ```
 First Run: Quran.com API → DataImporter → IndexedDB
-                                             ↓
+                                              ↓
 Normal Load: IndexedDB (fast) → PageRenderer (Tajweed merging)
-                                ↓ (miss)
-               localStorage / <script> tag fallback
-                                             ↓
+                                              ↓
                                 DOM (tajweed <rule> → <tajweed> elements)
-                                             ↓
+                                              ↓
                                 CSS Variables (color theming)
 ```
 
@@ -144,7 +138,7 @@ The app uses a sophisticated algorithm to merge Tajweed annotations:
 
 ### Caching Strategy
 - **IndexedDB** (primary) — stores surah data and chapters list for offline use, no size limit
-- **localStorage** (legacy fallback) — 7-day TTL, prefix `quran_cache_v1_`, used for API responses when IndexedDB is unavailable
+- **localStorage** (fallback) — 7-day TTL, prefix `quran_cache_v1_`, used for API responses when IndexedDB is unavailable
 - Automatic fallback to expired cache on network errors
 - `clearLocalCache()` method for manual cleanup of localStorage
 
@@ -155,21 +149,13 @@ The app uses a sophisticated algorithm to merge Tajweed annotations:
 
 ---
 
-## Local Data Mode
+## Offline Use
 
-For offline use or file:// protocol (no server required):
+No manual data download required — the app fetches everything automatically:
 
-1. **Fetch Data** (one-time setup):
-   ```bash
-   node scripts/fetch-surahs.js
-   ```
-
-2. **Convert to JS** (for file:// compatibility):
-   ```bash
-   node scripts/convert-to-js.js
-   ```
-
-3. **Load via `<script>` tags**: Each `data/{id}.js` sets `window._sd_{id}` variable
+1. **First run**: A wizard imports all 114 surahs from the Quran.com API into IndexedDB (shows progress, cancellable)
+2. **Subsequent loads**: Surah data reads from IndexedDB instantly — works offline after the first import
+3. **Re-download**: Use the **Re-download data** button in Settings to clear and re-import the full Quran (shows progress)
 
 ---
 
@@ -177,12 +163,8 @@ For offline use or file:// protocol (no server required):
 
 ### Quick Start (No Build Required)
 1. Clone or download the repository
-2. Open `index.html` in a browser (requires internet for API data)
-
-### Offline Setup
-1. Run `node scripts/fetch-surahs.js` to download all surah data
-2. Run `node scripts/convert-to-js.js` to create JS files
-3. Open `index.html` - data loads from local files
+2. Open `index.html` in a browser
+3. On first launch, follow the import wizard to download the Quran data
 
 ### Development
 No build tools required. Edit files directly:
@@ -227,14 +209,14 @@ No build tools required. Edit files directly:
 | Mobile Chrome | ✅ Fully Supported |
 | Mobile Safari | ✅ Fully Supported |
 
-**Note**: Requires `<script>` tag loading (no ES modules). Works with `file://` protocol.
+**Note**: Uses classic `<script>` tags (no ES modules). Works with `file://` protocol.
 
 ---
 
 ## Performance
 
 - **No Build Step** - Direct browser execution
-- **Lazy Loading** - Surah data loaded on demand via `<script>` injection
+- **Lazy Loading** - Surah data loaded on demand from IndexedDB
 - **Audio Prefetching** - Next ayah audio prefetched during playback
 - **CSS Variables** - Dynamic theming without reflow
 - **Responsive Images** - Font loading with `font-display: swap`
