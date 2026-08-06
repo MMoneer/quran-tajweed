@@ -18,6 +18,8 @@ const QuranSearch = (() => {
   let searchDebounceTimer = null;
   let surahNameMap = {};
   let indexBuildPromise = null;
+  let exportMenu = null;
+  let exportDocBound = false;
 
   /**
    * Normalize Arabic for search: strip diacritics, normalize letters
@@ -273,6 +275,15 @@ const QuranSearch = (() => {
       <div class="search-results-info">
         <i class="fa-solid fa-magnifying-glass"></i>
         <span>عدد النتائج: ${toArabicIndic(total)}</span>
+        <div class="export-wrap">
+          <button type="button" class="btn-export" id="btn-export">
+            <i class="fa-solid fa-download"></i> تصدير
+          </button>
+          <div class="export-dropdown" hidden>
+            <button type="button" class="export-option" data-format="txt">ملف نصي (.txt)</button>
+            <button type="button" class="export-option" data-format="csv">ملف CSV (.csv)</button>
+          </div>
+        </div>
       </div>
     `;
 
@@ -294,6 +305,7 @@ const QuranSearch = (() => {
       if (renderGeneration !== searchGeneration) return;
       container.innerHTML = html + loadMore;
       wireResultClick(container);
+      wireExportButton(container);
 
       const btn = document.getElementById('btn-load-more-results');
       if (btn) {
@@ -349,6 +361,53 @@ const QuranSearch = (() => {
       parts.push(r.text);
     }
     return parts.join('\n') + '\n';
+  }
+
+  /**
+   * Bind export button + dropdown (idempotent per rendered element)
+   * @param {HTMLElement} container
+   */
+  function wireExportButton(container) {
+    const wrap = container.querySelector('.export-wrap');
+    if (!wrap || wrap.dataset.bound) return;
+    wrap.dataset.bound = '1';
+    exportMenu = { wrap, dropdown: wrap.querySelector('.export-dropdown'), btn: wrap.querySelector('#btn-export') };
+    ensureExportDocumentListeners();
+
+    exportMenu.btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      exportMenu.dropdown.hidden = !exportMenu.dropdown.hidden;
+    });
+
+    exportMenu.dropdown.querySelectorAll('.export-option').forEach((opt) => {
+      opt.addEventListener('click', async () => {
+        exportMenu.dropdown.hidden = true;
+        exportMenu.btn.disabled = true;
+        exportMenu.btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جارٍ التصدير...';
+        try {
+          await exportResults(opt.dataset.format);
+        } finally {
+          exportMenu.btn.disabled = false;
+          exportMenu.btn.innerHTML = '<i class="fa-solid fa-download"></i> تصدير';
+        }
+      });
+    });
+  }
+
+  /**
+   * Bind document-level close handlers once
+   */
+  function ensureExportDocumentListeners() {
+    if (exportDocBound) return;
+    exportDocBound = true;
+    document.addEventListener('click', (e) => {
+      if (exportMenu && !exportMenu.wrap.contains(e.target)) {
+        exportMenu.dropdown.hidden = true;
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && exportMenu) exportMenu.dropdown.hidden = true;
+    });
   }
 
   /**
