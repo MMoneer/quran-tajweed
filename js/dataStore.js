@@ -185,7 +185,7 @@ const DataStore = (() => {
   /**
    * Save one surah's search index record
    * @param {number} surahId
-   * @param {Array} entries - Array of { ayah, verse_id, normalized }
+   * @param {Array} entries - Array of { ayah, verse_id, normalized, normalizedAlt }
    * @returns {Promise<void>}
    */
   function saveSearchIndex(surahId, entries) {

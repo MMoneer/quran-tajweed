@@ -156,13 +156,14 @@ const QuranSearch = (() => {
     const results = [];
     for (const record of records) {
       for (const entry of record.entries) {
+        const normMatch = entry.normalized.includes(query);
         const alt = entry.normalizedAlt || '';
-        if (entry.normalized.includes(query) || alt.includes(query)) {
+        if (normMatch || alt.includes(query)) {
           results.push({
             surah_id: record.surah_id,
             ayah: entry.ayah,
             verse_id: entry.verse_id,
-            normalized: entry.normalized.includes(query) ? entry.normalized : alt
+            normalized: normMatch ? entry.normalized : alt
           });
         }
       }
