@@ -114,6 +114,13 @@ const DataImporter = (() => {
     abortController = new AbortController();
     const signal = abortController.signal;
 
+    // Invalidate the search index — rebuilt lazily after import completes
+    try {
+      await DataStore.clearSearchIndex();
+    } catch (e) {
+      console.warn('Failed to clear search index:', e);
+    }
+
     let success = 0;
     let failed = 0;
 

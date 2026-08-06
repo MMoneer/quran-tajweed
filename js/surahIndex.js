@@ -108,44 +108,23 @@ const SurahIndex = (() => {
   }
 
   /**
-   * Set up Search Filter logic
+   * Re-render the full surah grid (used by QuranSearch to exit search)
+   */
+  function showGrid() {
+    renderChapters(chaptersList);
+  }
+
+  /**
+   * Set up the search input (delegated to QuranSearch)
    */
   function setupSearch() {
-    const searchInput = document.getElementById('surah-search');
-    const btnClear = document.getElementById('clear-search');
-
-    searchInput?.addEventListener('input', (e) => {
-      const query = e.target.value.trim().toLowerCase();
-      
-      // Clear button visibility
-      if (btnClear) {
-        btnClear.style.display = query.length > 0 ? 'flex' : 'none';
-      }
-
-      // Filter chapters list
-      const filtered = chaptersList.filter(surah => {
-        const idMatch = surah.id.toString() === query;
-        const nameSimpleMatch = surah.name_simple.toLowerCase().includes(query);
-        const nameArabicMatch = surah.name_arabic.includes(query);
-        const translatedMatch = surah.translated_name.name.toLowerCase().includes(query);
-        const placeMatch = (surah.revelation_place === 'makkah' ? 'مكية' : 'مدنية').includes(query) || 
-                            surah.revelation_place.toLowerCase().includes(query);
-
-        return idMatch || nameSimpleMatch || nameArabicMatch || translatedMatch || placeMatch;
-      });
-
-      renderChapters(filtered);
-    });
-
-    btnClear?.addEventListener('click', () => {
-      searchInput.value = '';
-      btnClear.style.display = 'none';
-      renderChapters(chaptersList);
-      searchInput.focus();
-    });
+    if (typeof QuranSearch !== 'undefined') {
+      QuranSearch.setup();
+    }
   }
 
   return {
-    init
+    init,
+    showGrid
   };
 })();
