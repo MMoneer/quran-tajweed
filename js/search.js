@@ -475,7 +475,9 @@ const QuranSearch = (() => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const revoke = () => URL.revokeObjectURL(url);
+      window.addEventListener('pointerdown', revoke, { once: true });
+      setTimeout(revoke, 60000);
     } catch (e) {
       console.warn('Export download failed:', e);
     }
