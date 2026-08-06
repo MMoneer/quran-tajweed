@@ -4,7 +4,7 @@
  */
 const DataStore = (() => {
   const DB_NAME = 'quran_tajweed_db';
-  const DB_VERSION = 2;
+  const DB_VERSION = 3;
   let db = null;
 
   /**
@@ -17,6 +17,7 @@ const DataStore = (() => {
 
       request.onupgradeneeded = (event) => {
         const database = event.target.result;
+        const oldVersion = event.oldVersion;
 
         if (!database.objectStoreNames.contains('chapters')) {
           database.createObjectStore('chapters', { keyPath: 'id' });
@@ -25,6 +26,14 @@ const DataStore = (() => {
           database.createObjectStore('surahs', { keyPath: 'surah_id' });
         }
         if (!database.objectStoreNames.contains('search_index')) {
+          database.createObjectStore('search_index', { keyPath: 'surah_id' });
+        }
+
+        // v3: invalidate search index (entries now carry normalizedAlt)
+        if (oldVersion < 3) {
+          if (database.objectStoreNames.contains('search_index')) {
+            database.deleteObjectStore('search_index');
+          }
           database.createObjectStore('search_index', { keyPath: 'surah_id' });
         }
       };

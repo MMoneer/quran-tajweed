@@ -36,6 +36,38 @@ const QuranSearch = (() => {
   }
 
   /**
+   * Normalize Arabic for search, mapping QPC combining letter forms:
+   * dagger alif -> ا, small waw -> و, small/high yeh -> ي, then strips diacritics.
+   * @param {string} text
+   * @returns {string}
+   */
+  function normalizeArabicMapped(text) {
+    return text
+      .replace(/\u0670/g, 'ا')
+      .replace(/\u06E5/g, 'و')
+      .replace(/[\u06E6\u06E7]/g, 'ي')
+      .replace(/[\u064B-\u0658\u06D6-\u06ED\u06E1]/g, '')
+      .replace(/\u0640/g, '')
+      .replace(/[أإآٱٲٳ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /**
+   * Compute the alternate (letter-mapped) normalized index text for one verse
+   * @param {Object} verse
+   * @returns {string}
+   */
+  function verseNormalizedTextAlt(verse) {
+    const words = (verse.words || [])
+      .filter(w => w.char_type_name === 'word')
+      .map(w => w.text_qpc_hafs || '');
+    return normalizeArabicMapped(words.join(' '));
+  }
+
+  /**
    * Compute the normalized index text for one verse
    * @param {Object} verse
    * @returns {string}
@@ -92,7 +124,8 @@ const QuranSearch = (() => {
             const entries = surahData.verses.map((v, i) => ({
               ayah: i + 1,
               verse_id: v.id,
-              normalized: verseNormalizedText(v)
+              normalized: verseNormalizedText(v),
+              normalizedAlt: verseNormalizedTextAlt(v)
             }));
             await DataStore.saveSearchIndex(id, entries);
           }
@@ -123,12 +156,13 @@ const QuranSearch = (() => {
     const results = [];
     for (const record of records) {
       for (const entry of record.entries) {
-        if (entry.normalized.includes(query)) {
+        const alt = entry.normalizedAlt || '';
+        if (entry.normalized.includes(query) || alt.includes(query)) {
           results.push({
             surah_id: record.surah_id,
             ayah: entry.ayah,
             verse_id: entry.verse_id,
-            normalized: entry.normalized
+            normalized: entry.normalized.includes(query) ? entry.normalized : alt
           });
         }
       }
@@ -559,7 +593,9 @@ const QuranSearch = (() => {
 
   return {
     normalizeArabic,
+    normalizeArabicMapped,
     verseNormalizedText,
+    verseNormalizedTextAlt,
     loadSurahNameMap,
     ensureIndexBuilt,
     runSearch,
