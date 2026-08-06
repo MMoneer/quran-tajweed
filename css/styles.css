@@ -40,6 +40,7 @@
   --bg-drawer: #11151f;
   --bg-overlay: rgba(5, 7, 10, 0.7);
   --bg-legend: rgba(17, 21, 31, 0.95);
+  --bg-dropdown: rgba(22, 27, 38, 0.95);
   
   --text-main: #f0f4f9;
   --text-muted: #8e9cae;
@@ -77,6 +78,7 @@ body.light-theme {
   --bg-drawer: #ffffff;
   --bg-overlay: rgba(0, 0, 0, 0.4);
   --bg-legend: rgba(255, 255, 255, 0.96);
+  --bg-dropdown: #ffffff;
   
   --text-main: #1c2434;
   --text-muted: #5e6d82;
@@ -2437,7 +2439,7 @@ a:focus-visible {
   top: calc(100% + 8px);
   left: 0;
   right: 0;
-  background-color: var(--bg-card);
+  background-color: var(--bg-dropdown);
   border: 1px solid var(--border-color);
   border-radius: 14px;
   box-shadow: var(--shadow-lg);
