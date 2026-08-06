@@ -220,6 +220,7 @@ const QuranSearch = (() => {
     const nameMap = await loadSurahNameMap();
 
     if (results.length === 0) {
+      if (renderGeneration !== searchGeneration) return;
       container.innerHTML = `
         <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
           <i class="fa-solid fa-magnifying-glass" style="font-size: 24px; margin-bottom: 8px;"></i>
@@ -287,6 +288,56 @@ const QuranSearch = (() => {
     });
   }
 
+  /**
+   * Get recent searches from localStorage (most-recent-first)
+   * @returns {string[]}
+   */
+  function getRecentSearches() {
+    try {
+      const raw = localStorage.getItem(RECENT_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      console.warn('Failed to parse recent searches:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Persist recent searches (capped, deduped)
+   * @param {string[]} arr
+   */
+  function saveRecentSearches(arr) {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(arr.slice(0, RECENT_MAX)));
+  }
+
+  /**
+   * Record a query after a search runs
+   * @param {string} query
+   */
+  function addRecentSearch(query) {
+    const q = query.trim();
+    if (!q) return;
+    const arr = getRecentSearches().filter(x => x !== q);
+    arr.unshift(q);
+    saveRecentSearches(arr);
+  }
+
+  /**
+   * Remove a single recent search
+   * @param {string} query
+   */
+  function removeRecentSearch(query) {
+    saveRecentSearches(getRecentSearches().filter(x => x !== query));
+  }
+
+  /**
+   * Clear all recent searches
+   */
+  function clearRecentSearches() {
+    saveRecentSearches([]);
+  }
+
   return {
     normalizeArabic,
     verseNormalizedText,
@@ -300,6 +351,10 @@ const QuranSearch = (() => {
     RECENT_KEY,
     RECENT_MAX,
     HISTORY_SHOW,
-    DEBOUNCE_MS
+    DEBOUNCE_MS,
+    getRecentSearches,
+    addRecentSearch,
+    removeRecentSearch,
+    clearRecentSearches
   };
 })();
