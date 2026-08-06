@@ -9,18 +9,28 @@ const PageRenderer = (() => {
   function buildVerseHTML(verse) {
     const wordTexts = [];
     for (const word of verse.words) {
-      if (word.char_type_name === 'word' && word.text_qpc_hafs) {
-        const merged = mergeTajweedToQPC(
-          word.text_qpc_hafs,
-          word.text_uthmani_tajweed || ''
-        );
-        wordTexts.push(merged);
-      } else if (word.char_type_name === 'end') {
-        const num = word.text_qpc_hafs || word.text_uthmani_tajweed || word.text || '';
-        wordTexts.push(`<span class="end">${num}</span>`);
-      }
+      const html = buildWordHTML(word);
+      if (html) wordTexts.push(html);
     }
     return wordTexts.join('\u200C ');
+  }
+
+  /**
+   * Build HTML for a single word (tajweed-merged) or empty string
+   * @param {Object} word - Word object from verse data
+   * @returns {string}
+   */
+  function buildWordHTML(word) {
+    if (word.char_type_name === 'word' && word.text_qpc_hafs) {
+      return mergeTajweedToQPC(
+        word.text_qpc_hafs,
+        word.text_uthmani_tajweed || ''
+      );
+    } else if (word.char_type_name === 'end') {
+      const num = word.text_qpc_hafs || word.text_uthmani_tajweed || word.text || '';
+      return `<span class="end">${num}</span>`;
+    }
+    return '';
   }
   
   /**
@@ -295,6 +305,8 @@ const PageRenderer = (() => {
   }
   
   return {
-    renderSurahWithPages
+    renderSurahWithPages,
+    buildWordHTML,
+    wrapNormalMadd
   };
 })();
