@@ -467,6 +467,7 @@ const QuranSearch = (() => {
   function showGrid() {
     activeQuery = null;
     activeResults = [];
+    searchGeneration++;
     if (typeof SurahIndex !== 'undefined') {
       SurahIndex.showGrid();
     }
@@ -478,6 +479,7 @@ const QuranSearch = (() => {
   function clearSearch() {
     activeQuery = null;
     activeResults = [];
+    searchGeneration++;
     const input = document.getElementById('surah-search');
     const btnClear = document.getElementById('clear-search');
     if (input) input.value = '';
