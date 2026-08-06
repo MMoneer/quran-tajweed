@@ -422,11 +422,12 @@ const QuranSearch = (() => {
     const rows = [];
     for (const result of results) {
       let surahData = cache.get(result.surah_id);
-      if (!surahData) {
+      if (!cache.has(result.surah_id)) {
         try {
           surahData = await QuranAPI.getSurahLocal(result.surah_id);
         } catch (e) {
           console.warn(`Export skipped surah ${result.surah_id}:`, e.message);
+          cache.set(result.surah_id, null);
           continue;
         }
         cache.set(result.surah_id, surahData);
@@ -474,7 +475,7 @@ const QuranSearch = (() => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
       console.warn('Export download failed:', e);
     }
