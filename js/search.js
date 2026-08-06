@@ -338,6 +338,102 @@ const QuranSearch = (() => {
     saveRecentSearches([]);
   }
 
+  /**
+   * Create the recent-searches dropdown element (lazy, once)
+   * @returns {HTMLElement}
+   */
+  function getDropdown() {
+    let dropdown = document.getElementById('recent-searches-dropdown');
+    if (dropdown) return dropdown;
+
+    dropdown = document.createElement('div');
+    dropdown.className = 'recent-searches-dropdown';
+    dropdown.id = 'recent-searches-dropdown';
+    dropdown.hidden = true;
+    document.querySelector('.search-wrapper').appendChild(dropdown);
+    return dropdown;
+  }
+
+  /**
+   * Render dropdown contents for the given searches list
+   * @param {HTMLElement} dropdown
+   * @param {string[]} searches
+   */
+  function renderDropdown(dropdown, searches) {
+    const items = searches
+      .map(q => `
+        <div class="recent-search-item">
+          <button type="button" class="recent-search-query">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <span>${q}</span>
+          </button>
+          <button type="button" class="recent-search-remove" data-q="${q}" title="حذف">✕</button>
+        </div>
+      `).join('');
+
+    dropdown.innerHTML = `
+      <div class="recent-header">البحث الأخير</div>
+      ${items || '<div class="recent-empty">لا يوجد بحث سابق</div>'}
+      <button type="button" id="btn-clear-recent" class="recent-clear-all">
+        <i class="fa-solid fa-trash-can"></i> مسح السجل
+      </button>
+    `;
+
+    dropdown.querySelectorAll('.recent-search-query').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const q = btn.querySelector('span').textContent;
+        document.getElementById('surah-search').value = q;
+        dropdown.hidden = true;
+        QuranSearch.execute(q);
+      });
+    });
+
+    dropdown.querySelectorAll('.recent-search-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeRecentSearch(btn.dataset.q);
+        refreshDropdown();
+      });
+    });
+
+    const btnClear = document.getElementById('btn-clear-recent');
+    if (btnClear) {
+      btnClear.addEventListener('click', () => {
+        clearRecentSearches();
+        refreshDropdown();
+      });
+    }
+  }
+
+  /**
+   * Show the dropdown if the input is empty and there is history
+   */
+  function showDropdown() {
+    const input = document.getElementById('surah-search');
+    const dropdown = getDropdown();
+    const searches = getRecentSearches().slice(0, HISTORY_SHOW);
+    if (!input.value.trim() && searches.length > 0) {
+      renderDropdown(dropdown, searches);
+      dropdown.hidden = false;
+    } else {
+      dropdown.hidden = true;
+    }
+  }
+
+  /**
+   * Refresh dropdown contents after history changes
+   */
+  function refreshDropdown() {
+    const dropdown = document.getElementById('recent-searches-dropdown');
+    if (!dropdown || dropdown.hidden) return;
+    const searches = getRecentSearches().slice(0, HISTORY_SHOW);
+    if (searches.length === 0) {
+      dropdown.hidden = true;
+      return;
+    }
+    renderDropdown(dropdown, searches);
+  }
+
   return {
     normalizeArabic,
     verseNormalizedText,
@@ -355,6 +451,8 @@ const QuranSearch = (() => {
     getRecentSearches,
     addRecentSearch,
     removeRecentSearch,
-    clearRecentSearches
+    clearRecentSearches,
+    showDropdown,
+    refreshDropdown
   };
 })();
