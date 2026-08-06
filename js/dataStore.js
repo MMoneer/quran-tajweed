@@ -4,7 +4,7 @@
  */
 const DataStore = (() => {
   const DB_NAME = 'quran_tajweed_db';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   let db = null;
 
   /**
@@ -23,6 +23,9 @@ const DataStore = (() => {
         }
         if (!database.objectStoreNames.contains('surahs')) {
           database.createObjectStore('surahs', { keyPath: 'surah_id' });
+        }
+        if (!database.objectStoreNames.contains('search_index')) {
+          database.createObjectStore('search_index', { keyPath: 'surah_id' });
         }
       };
 
@@ -171,6 +174,72 @@ const DataStore = (() => {
   }
 
   /**
+   * Save one surah's search index record
+   * @param {number} surahId
+   * @param {Array} entries - Array of { ayah, verse_id, normalized }
+   * @returns {Promise<void>}
+   */
+  function saveSearchIndex(surahId, entries) {
+    return new Promise((resolve, reject) => {
+      const store = getStore('search_index', 'readwrite');
+      const request = store.put({ surah_id: surahId, entries });
+      request.onsuccess = () => resolve();
+      request.onerror = (event) => {
+        console.error('Error saving search index:', event.target.error);
+        reject(event.target.error);
+      };
+    });
+  }
+
+  /**
+   * Retrieve all search index records
+   * @returns {Promise<Array>} Array of { surah_id, entries }
+   */
+  function getSearchIndex() {
+    return new Promise((resolve, reject) => {
+      const store = getStore('search_index');
+      const request = store.getAll();
+      request.onsuccess = (event) => resolve(event.target.result || []);
+      request.onerror = (event) => {
+        console.error('Error getting search index:', event.target.error);
+        reject(event.target.error);
+      };
+    });
+  }
+
+  /**
+   * Get surah IDs that already have a search index record
+   * @returns {Promise<number[]>}
+   */
+  function getIndexedSurahIds() {
+    return new Promise((resolve, reject) => {
+      const store = getStore('search_index');
+      const request = store.getAllKeys();
+      request.onsuccess = (event) => resolve(event.target.result || []);
+      request.onerror = (event) => {
+        console.error('Error getting indexed surah IDs:', event.target.error);
+        reject(event.target.error);
+      };
+    });
+  }
+
+  /**
+   * Wipe the search index store
+   * @returns {Promise<void>}
+   */
+  function clearSearchIndex() {
+    return new Promise((resolve, reject) => {
+      const store = getStore('search_index', 'readwrite');
+      const request = store.clear();
+      request.onsuccess = () => resolve();
+      request.onerror = (event) => {
+        console.error('Error clearing search index:', event.target.error);
+        reject(event.target.error);
+      };
+    });
+  }
+
+  /**
    * Wipe all data from both stores
    * @returns {Promise<void>}
    */
@@ -195,6 +264,10 @@ const DataStore = (() => {
     getSurah,
     hasData,
     getImportedSurahIds,
+    saveSearchIndex,
+    getSearchIndex,
+    getIndexedSurahIds,
+    clearSearchIndex,
     clearAll
   };
 })();
