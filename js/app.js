@@ -122,6 +122,9 @@ const App = (() => {
         indexSection.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'instant' });
         SurahViewer.cleanup();
+        if (typeof QuranSearch !== 'undefined') {
+          QuranSearch.restoreIfActive();
+        }
       }
     };
 
@@ -139,7 +142,16 @@ const App = (() => {
     // Index button in header
     const btnIndex = document.getElementById('btn-index');
     btnIndex?.addEventListener('click', () => {
-      window.location.hash = '';
+      // If already on the index view, dismiss any active search (escape hatch)
+      const hash = window.location.hash;
+      if (hash === '' || hash === '#') {
+        if (typeof QuranSearch !== 'undefined') {
+          QuranSearch.clearSearch();
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        window.location.hash = '';
+      }
     });
 
     // Tajweed rules button in header
