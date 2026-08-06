@@ -2522,3 +2522,64 @@ a:focus-visible {
   color: var(--accent);
   background-color: var(--accent-light);
 }
+
+/* Export button + format dropdown */
+.export-wrap {
+  position: relative;
+  margin-inline-start: auto;
+}
+
+.btn-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border-gold);
+  border-radius: 10px;
+  color: var(--accent);
+  font-family: var(--font-arabic-ui);
+  font-size: 13px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-export:hover {
+  background-color: var(--accent-light);
+}
+
+.btn-export:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.export-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 160px;
+  background-color: var(--bg-dropdown);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 50;
+}
+
+.export-option {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-family: var(--font-arabic-ui);
+  font-size: 14px;
+  text-align: right;
+  cursor: pointer;
+}
+
+.export-option:hover {
+  background-color: var(--accent-light);
+  color: var(--accent);
+}
