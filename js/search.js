@@ -434,6 +434,125 @@ const QuranSearch = (() => {
     renderDropdown(dropdown, searches);
   }
 
+  /**
+   * Public entry point: run a search, persist state + history
+   * @param {string} rawQuery
+   */
+  async function execute(rawQuery) {
+    const query = rawQuery.trim();
+    const input = document.getElementById('surah-search');
+    const btnClear = document.getElementById('clear-search');
+    if (input) input.value = query;
+    if (btnClear) btnClear.style.display = query ? 'flex' : 'none';
+
+    if (!normalizeArabic(query)) {
+      showGrid();
+      return;
+    }
+
+    const results = await runSearch(query);
+    if (results === null) return;
+
+    activeQuery = query;
+    activeResults = results;
+    addRecentSearch(query);
+    renderResults(results, query);
+  }
+
+  /**
+   * Render the full surah grid (delegates to SurahIndex) and clear search state
+   */
+  function showGrid() {
+    activeQuery = null;
+    activeResults = [];
+    if (typeof SurahIndex !== 'undefined') {
+      SurahIndex.showGrid();
+    }
+  }
+
+  /**
+   * Clear the active search: reset input, hide dropdown, show grid
+   */
+  function clearSearch() {
+    activeQuery = null;
+    activeResults = [];
+    const input = document.getElementById('surah-search');
+    const btnClear = document.getElementById('clear-search');
+    if (input) input.value = '';
+    if (btnClear) btnClear.style.display = 'none';
+    const dropdown = document.getElementById('recent-searches-dropdown');
+    if (dropdown) dropdown.hidden = true;
+    if (typeof SurahIndex !== 'undefined') {
+      SurahIndex.showGrid();
+    }
+  }
+
+  /**
+   * Restore the active search on return to the index view
+   */
+  function restoreIfActive() {
+    if (!activeQuery) return;
+    const input = document.getElementById('surah-search');
+    const btnClear = document.getElementById('clear-search');
+    if (input) input.value = activeQuery;
+    if (btnClear) btnClear.style.display = 'flex';
+    renderResults(activeResults, activeQuery);
+  }
+
+  /**
+   * Set up the search input, clear button, and dropdown listeners
+   */
+  function setup() {
+    const input = document.getElementById('surah-search');
+    const btnClear = document.getElementById('clear-search');
+    if (!input) return;
+
+    let debounceTimer;
+
+    input.addEventListener('input', () => {
+      const query = input.value.trim();
+      if (btnClear) btnClear.style.display = query ? 'flex' : 'none';
+      clearTimeout(debounceTimer);
+
+      const dropdown = document.getElementById('recent-searches-dropdown');
+      if (dropdown) dropdown.hidden = true;
+
+      if (!query) {
+        showGrid();
+        return;
+      }
+      debounceTimer = setTimeout(() => execute(query), DEBOUNCE_MS);
+    });
+
+    input.addEventListener('focus', showDropdown);
+
+    input.addEventListener('blur', () => {
+      setTimeout(() => {
+        const dropdown = document.getElementById('recent-searches-dropdown');
+        if (dropdown) dropdown.hidden = true;
+      }, 150);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(debounceTimer);
+        execute(input.value.trim());
+      }
+      if (e.key === 'Escape') {
+        const dropdown = document.getElementById('recent-searches-dropdown');
+        if (dropdown) dropdown.hidden = true;
+      }
+    });
+
+    btnClear?.addEventListener('click', () => {
+      input.value = '';
+      clearSearch();
+      input.focus();
+      showDropdown();
+    });
+  }
+
   return {
     normalizeArabic,
     verseNormalizedText,
@@ -444,15 +563,20 @@ const QuranSearch = (() => {
     toArabicIndic,
     buildResultRow,
     renderResults,
-    RECENT_KEY,
-    RECENT_MAX,
-    HISTORY_SHOW,
-    DEBOUNCE_MS,
     getRecentSearches,
     addRecentSearch,
     removeRecentSearch,
     clearRecentSearches,
     showDropdown,
-    refreshDropdown
+    refreshDropdown,
+    execute,
+    showGrid,
+    clearSearch,
+    restoreIfActive,
+    setup,
+    RECENT_KEY,
+    RECENT_MAX,
+    HISTORY_SHOW,
+    DEBOUNCE_MS
   };
 })();
