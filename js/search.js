@@ -325,6 +325,33 @@ const QuranSearch = (() => {
   }
 
   /**
+   * Build export file content from result rows (pure, testable)
+   * @param {Array} rows - Array of { surahName, ayah, text }
+   * @param {string} format - 'txt' or 'csv'
+   * @returns {string}
+   */
+  function buildExportContent(rows, format) {
+    if (format === 'csv') {
+      const esc = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+      const lines = [['السورة', 'رقم الآية', 'نص الآية'].map(esc).join(',')];
+      for (const r of rows) {
+        lines.push([esc(r.surahName), esc(r.ayah), esc(r.text)].join(','));
+      }
+      return '\uFEFF' + lines.join('\r\n') + '\r\n';
+    }
+    const parts = [
+      `نتائج البحث — عدد النتائج: ${toArabicIndic(rows.length)}`,
+      '========================================'
+    ];
+    for (const r of rows) {
+      parts.push('');
+      parts.push(`سورة ${r.surahName} / الآية ${r.ayah}`);
+      parts.push(r.text);
+    }
+    return parts.join('\n') + '\n';
+  }
+
+  /**
    * Get recent searches from localStorage (most-recent-first)
    * @returns {string[]}
    */
@@ -602,6 +629,7 @@ const QuranSearch = (() => {
     runSearch,
     findMatchedWordIndices,
     toArabicIndic,
+    buildExportContent,
     buildResultRow,
     renderResults,
     getRecentSearches,
