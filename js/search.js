@@ -15,6 +15,7 @@ const QuranSearch = (() => {
   let activeQuery = null;
   let activeResults = [];
   let searchGeneration = 0;
+  let searchDebounceTimer = null;
   let surahNameMap = {};
   let indexBuildPromise = null;
 
@@ -384,6 +385,7 @@ const QuranSearch = (() => {
         const q = btn.querySelector('span').textContent;
         document.getElementById('surah-search').value = q;
         dropdown.hidden = true;
+        clearTimeout(searchDebounceTimer);
         QuranSearch.execute(q);
       });
     });
@@ -507,12 +509,10 @@ const QuranSearch = (() => {
     const btnClear = document.getElementById('clear-search');
     if (!input) return;
 
-    let debounceTimer;
-
     input.addEventListener('input', () => {
       const query = input.value.trim();
       if (btnClear) btnClear.style.display = query ? 'flex' : 'none';
-      clearTimeout(debounceTimer);
+      clearTimeout(searchDebounceTimer);
 
       const dropdown = document.getElementById('recent-searches-dropdown');
       if (dropdown) dropdown.hidden = true;
@@ -521,13 +521,14 @@ const QuranSearch = (() => {
         showGrid();
         return;
       }
-      debounceTimer = setTimeout(() => execute(query), DEBOUNCE_MS);
+      searchDebounceTimer = setTimeout(() => execute(query), DEBOUNCE_MS);
     });
 
     input.addEventListener('focus', showDropdown);
 
     input.addEventListener('blur', () => {
       setTimeout(() => {
+        if (document.activeElement === input) return;
         const dropdown = document.getElementById('recent-searches-dropdown');
         if (dropdown) dropdown.hidden = true;
       }, 150);
@@ -536,7 +537,7 @@ const QuranSearch = (() => {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        clearTimeout(debounceTimer);
+        clearTimeout(searchDebounceTimer);
         execute(input.value.trim());
       }
       if (e.key === 'Escape') {
@@ -546,6 +547,7 @@ const QuranSearch = (() => {
     });
 
     btnClear?.addEventListener('click', () => {
+      clearTimeout(searchDebounceTimer);
       input.value = '';
       clearSearch();
       input.focus();
