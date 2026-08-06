@@ -16,6 +16,7 @@ const QuranSearch = (() => {
   let activeResults = [];
   let searchGeneration = 0;
   let surahNameMap = {};
+  let indexBuildPromise = null;
 
   /**
    * Normalize Arabic for search: strip diacritics, normalize letters
@@ -63,38 +64,44 @@ const QuranSearch = (() => {
    * Shows progress in the grid container while building.
    * @returns {Promise<void>}
    */
-  async function ensureIndexBuilt() {
-    const container = document.getElementById('surah-grid');
-    const indexed = await DataStore.getIndexedSurahIds();
-    const indexedSet = new Set(indexed);
-    const missing = [];
-    for (let id = 1; id <= 114; id++) {
-      if (!indexedSet.has(id)) missing.push(id);
-    }
-    if (missing.length === 0) return;
-
-    for (let i = 0; i < missing.length; i++) {
-      const id = missing[i];
-      container.innerHTML = `
-        <div class="index-loading" style="grid-column: 1/-1; text-align: center; padding: 40px;">
-          <div class="spinner"></div>
-          <p>جاري بناء فهرس البحث... ${i + 1}/${missing.length}</p>
-        </div>
-      `;
-      try {
-        const surahData = await QuranAPI.getSurahLocal(id);
-        if (surahData && surahData.verses) {
-          const entries = surahData.verses.map((v, i) => ({
-            ayah: i + 1,
-            verse_id: v.id,
-            normalized: verseNormalizedText(v)
-          }));
-          await DataStore.saveSearchIndex(id, entries);
-        }
-      } catch (e) {
-        console.warn(`Search index build skipped surah ${id}:`, e.message);
+  function ensureIndexBuilt() {
+    if (indexBuildPromise) return indexBuildPromise;
+    indexBuildPromise = (async () => {
+      const container = document.getElementById('surah-grid');
+      if (!container) return;
+      const indexed = await DataStore.getIndexedSurahIds();
+      const indexedSet = new Set(indexed);
+      const missing = [];
+      for (let id = 1; id <= 114; id++) {
+        if (!indexedSet.has(id)) missing.push(id);
       }
-    }
+      if (missing.length === 0) return;
+
+      for (let i = 0; i < missing.length; i++) {
+        const id = missing[i];
+        container.innerHTML = `
+          <div class="index-loading" style="grid-column: 1/-1; text-align: center; padding: 40px;">
+            <div class="spinner"></div>
+            <p>جاري بناء فهرس البحث... ${i + 1}/${missing.length}</p>
+          </div>
+        `;
+        try {
+          const surahData = await QuranAPI.getSurahLocal(id);
+          if (surahData && surahData.verses) {
+            const entries = surahData.verses.map((v, i) => ({
+              ayah: i + 1,
+              verse_id: v.id,
+              normalized: verseNormalizedText(v)
+            }));
+            await DataStore.saveSearchIndex(id, entries);
+          }
+        } catch (e) {
+          console.warn(`Search index build skipped surah ${id}:`, e.message);
+        }
+      }
+    })();
+    indexBuildPromise.finally(() => { indexBuildPromise = null; }).catch(() => {});
+    return indexBuildPromise;
   }
 
   /**
@@ -129,12 +136,165 @@ const QuranSearch = (() => {
     return results;
   }
 
+  /**
+   * Find which word indices in a normalized ayah text contain the match range
+   * @param {string} normalized - full normalized ayah text (words joined by single spaces)
+   * @param {string} query - normalized query
+   * @returns {Set<number>} word indices (0-based, over 'word' char_type words)
+   */
+  function findMatchedWordIndices(normalized, query) {
+    const matches = new Set();
+    const startIdx = normalized.indexOf(query);
+    if (startIdx === -1) return matches;
+    const endIdx = startIdx + query.length - 1;
+
+    let pos = 0;
+    const wordCount = normalized.split(' ').length;
+    for (let i = 0; i < wordCount; i++) {
+      const spaceIdx = normalized.indexOf(' ', pos);
+      const wordEnd = (spaceIdx === -1 ? normalized.length : spaceIdx) - 1;
+      if (pos <= endIdx && wordEnd >= startIdx) matches.add(i);
+      pos = spaceIdx === -1 ? normalized.length : spaceIdx + 1;
+    }
+    return matches;
+  }
+
+  /**
+   * Convert a number to Arabic-Indic digits
+   * @param {number|string} num
+   * @returns {string}
+   */
+  function toArabicIndic(num) {
+    return String(num).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+  }
+
+  /**
+   * Build one result row's HTML string
+   * @param {Object} result - { surah_id, ayah, verse_id, normalized }
+   * @param {string} query - normalized query
+   * @param {Object} nameMap - surah_id -> name_arabic
+   * @returns {Promise<string>}
+   */
+  async function buildResultRow(result, query, nameMap) {
+    const surahData = await QuranAPI.getSurahLocal(result.surah_id);
+    const verse = surahData?.verses?.[result.ayah - 1];
+    const nameAr = nameMap[result.surah_id] || `سورة ${result.surah_id}`;
+
+    let ayahHtml = '';
+    if (verse && verse.words) {
+      const matchedIndices = findMatchedWordIndices(result.normalized, query);
+      let wordIdx = 0;
+      for (const word of verse.words) {
+        if (word.char_type_name === 'word') {
+          const wHtml = PageRenderer.buildWordHTML(word);
+          ayahHtml += matchedIndices.has(wordIdx)
+            ? `<mark class="search-highlight">${wHtml}</mark>`
+            : wHtml;
+          ayahHtml += '\u200C ';
+          wordIdx++;
+        } else if (word.char_type_name === 'end') {
+          ayahHtml += PageRenderer.buildWordHTML(word);
+        }
+      }
+    }
+    ayahHtml = PageRenderer.wrapNormalMadd(ayahHtml);
+
+    return `
+      <div class="search-result-item" data-surah="${result.surah_id}" data-verse-id="${result.verse_id}">
+        <div class="result-label">${nameAr} / الآية ${toArabicIndic(result.ayah)}</div>
+        <div class="result-ayah" dir="rtl">${ayahHtml}</div>
+      </div>
+    `;
+  }
+
+  /**
+   * Render a list of results into the surah-grid container
+   * Renders first CHUNK rows, then appends via "عرض المزيد" button.
+   * @param {Array} results
+   * @param {string} rawQuery
+   */
+  async function renderResults(results, rawQuery) {
+    const container = document.getElementById('surah-grid');
+    const query = normalizeArabic(rawQuery);
+    const nameMap = await loadSurahNameMap();
+
+    if (results.length === 0) {
+      container.innerHTML = `
+        <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+          <i class="fa-solid fa-magnifying-glass" style="font-size: 24px; margin-bottom: 8px;"></i>
+          <p>لا توجد نتائج تطابق بحثك.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const CHUNK = 200;
+    const total = results.length;
+    let index = 0;
+    let html = `
+      <div class="search-results-info">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <span>عدد النتائج: ${toArabicIndic(total)}</span>
+      </div>
+    `;
+
+    async function renderNextChunk() {
+      const end = Math.min(index + CHUNK, total);
+      for (let i = index; i < end; i++) {
+        html += await buildResultRow(results[i], query, nameMap);
+      }
+      index = end;
+
+      let loadMore = '';
+      if (index < total) {
+        loadMore = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 16px;">
+            <button id="btn-load-more-results" class="btn-action">عرض المزيد من النتائج (${toArabicIndic(total - index)})</button>
+          </div>
+        `;
+      }
+      container.innerHTML = html + loadMore;
+      wireResultClick(container);
+
+      const btn = document.getElementById('btn-load-more-results');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          btn.remove();
+          renderNextChunk();
+        });
+      }
+    }
+
+    await renderNextChunk();
+  }
+
+  /**
+   * Wire click handlers on result rows
+   * @param {HTMLElement} container
+   */
+  function wireResultClick(container) {
+    container.querySelectorAll('.search-result-item').forEach(item => {
+      if (item.dataset.bound) return;
+      item.dataset.bound = '1';
+      item.addEventListener('click', () => {
+        const surahId = item.dataset.surah;
+        const verseId = item.dataset.verseId;
+        window._pendingAyahScroll = parseInt(verseId, 10);
+        window.location.hash = `#surah/${surahId}`;
+      });
+    });
+  }
+
   return {
     normalizeArabic,
     verseNormalizedText,
     loadSurahNameMap,
     ensureIndexBuilt,
     runSearch,
+    findMatchedWordIndices,
+    toArabicIndic,
+    buildResultRow,
+    renderResults,
     RECENT_KEY,
     RECENT_MAX,
     HISTORY_SHOW,
