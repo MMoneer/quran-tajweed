@@ -240,14 +240,15 @@ const DataStore = (() => {
   }
 
   /**
-   * Wipe all data from both stores
+   * Wipe all data from every store
    * @returns {Promise<void>}
    */
   function clearAll() {
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(['chapters', 'surahs'], 'readwrite');
+      const tx = db.transaction(['chapters', 'surahs', 'search_index'], 'readwrite');
       tx.objectStore('chapters').clear();
       tx.objectStore('surahs').clear();
+      tx.objectStore('search_index').clear();
       tx.oncomplete = () => resolve();
       tx.onerror = (event) => {
         console.error('Error clearing data:', event.target.error);
