@@ -200,7 +200,7 @@ const QuranSearch = (() => {
     ayahHtml = PageRenderer.wrapNormalMadd(ayahHtml);
 
     return `
-      <div class="search-result-item" data-surah="${result.surah_id}" data-verse-id="${result.verse_id}">
+      <div class="search-result-item" data-surah="${result.surah_id}" data-verse-id="${result.verse_id}" data-ayah="${result.ayah}">
         <div class="result-label">${nameAr} / الآية ${toArabicIndic(result.ayah)}</div>
         <div class="result-ayah" dir="rtl">${ayahHtml}</div>
       </div>
@@ -214,6 +214,7 @@ const QuranSearch = (() => {
    * @param {string} rawQuery
    */
   async function renderResults(results, rawQuery) {
+    const renderGeneration = searchGeneration;
     const container = document.getElementById('surah-grid');
     const query = normalizeArabic(rawQuery);
     const nameMap = await loadSurahNameMap();
@@ -253,6 +254,7 @@ const QuranSearch = (() => {
           </div>
         `;
       }
+      if (renderGeneration !== searchGeneration) return;
       container.innerHTML = html + loadMore;
       wireResultClick(container);
 
@@ -278,8 +280,8 @@ const QuranSearch = (() => {
       item.dataset.bound = '1';
       item.addEventListener('click', () => {
         const surahId = item.dataset.surah;
-        const verseId = item.dataset.verseId;
-        window._pendingAyahScroll = parseInt(verseId, 10);
+        const ayah = item.dataset.ayah;
+        window._pendingAyahScroll = parseInt(ayah, 10);
         window.location.hash = `#surah/${surahId}`;
       });
     });
