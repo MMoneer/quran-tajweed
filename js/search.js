@@ -381,14 +381,15 @@ const QuranSearch = (() => {
 
     exportMenu.dropdown.querySelectorAll('.export-option').forEach((opt) => {
       opt.addEventListener('click', async () => {
-        exportMenu.dropdown.hidden = true;
-        exportMenu.btn.disabled = true;
-        exportMenu.btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جارٍ التصدير...';
+        const menu = exportMenu;
+        menu.dropdown.hidden = true;
+        menu.btn.disabled = true;
+        menu.btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جارٍ التصدير...';
         try {
           await exportResults(opt.dataset.format);
         } finally {
-          exportMenu.btn.disabled = false;
-          exportMenu.btn.innerHTML = '<i class="fa-solid fa-download"></i> تصدير';
+          menu.btn.disabled = false;
+          menu.btn.innerHTML = '<i class="fa-solid fa-download"></i> تصدير';
         }
       });
     });
@@ -408,6 +409,88 @@ const QuranSearch = (() => {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && exportMenu) exportMenu.dropdown.hidden = true;
     });
+  }
+
+  /**
+   * Build the rows array for export, fetching each surah once (cached)
+   * @param {Array} results - runSearch results { surah_id, ayah, verse_id, normalized }
+   * @returns {Promise<Array>} rows { surahName, ayah, text }
+   */
+  async function buildExportRows(results) {
+    const nameMap = await loadSurahNameMap();
+    const cache = new Map();
+    const rows = [];
+    for (const result of results) {
+      let surahData = cache.get(result.surah_id);
+      if (!surahData) {
+        try {
+          surahData = await QuranAPI.getSurahLocal(result.surah_id);
+        } catch (e) {
+          console.warn(`Export skipped surah ${result.surah_id}:`, e.message);
+          continue;
+        }
+        cache.set(result.surah_id, surahData);
+      }
+      const verse = surahData?.verses?.[result.ayah - 1];
+      if (!verse || !verse.words) continue;
+      const text = verse.words
+        .filter(w => w.char_type_name === 'word')
+        .map(w => w.text_qpc_hafs || '')
+        .join(' ');
+      rows.push({
+        surahName: nameMap[result.surah_id] || `سورة ${result.surah_id}`,
+        ayah: toArabicIndic(result.ayah),
+        text
+      });
+    }
+    return rows;
+  }
+
+  /**
+   * Build an export filename with a DD-MM-YYYY_HH-MM-SS local timestamp
+   * @param {string} ext - 'txt' or 'csv'
+   * @returns {string}
+   */
+  function exportFileName(ext) {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const stamp = `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+    return `Quran_search_${stamp}.${ext}`;
+  }
+
+  /**
+   * Trigger a browser download of a string as a file
+   * @param {string} filename
+   * @param {string} content
+   * @param {string} mime
+   */
+  function downloadFile(filename, content, mime) {
+    try {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.warn('Export download failed:', e);
+    }
+  }
+
+  /**
+   * Export all active results in the given format
+   * @param {string} format - 'txt' or 'csv'
+   * @returns {Promise<void>}
+   */
+  async function exportResults(format) {
+    const rows = await buildExportRows(activeResults);
+    const content = buildExportContent(rows, format);
+    const ext = format === 'csv' ? 'csv' : 'txt';
+    const mime = format === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8';
+    downloadFile(exportFileName(ext), content, mime);
   }
 
   /**
