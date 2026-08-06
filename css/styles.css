@@ -430,7 +430,6 @@ body.light-theme .btn-close:hover {
   box-shadow: var(--shadow-md);
   border-radius: 16px;
   border: 1px solid var(--border-color);
-  overflow: hidden;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
@@ -453,6 +452,7 @@ body.light-theme .btn-close:hover {
   padding: 16px 50px 16px 50px;
   background-color: var(--bg-input);
   border: none;
+  border-radius: 16px;
   outline: none;
   color: var(--text-main);
   font-family: var(--font-arabic-ui);
