@@ -31,7 +31,7 @@ const DataImporter = (() => {
 
     while (page <= totalPages) {
       const resp = await fetch(
-        `${BASE_URL}/verses/by_chapter/${surahId}?words=true&word_fields=text_qpc_hafs,text_uthmani_tajweed,page_number&page=${page}&per_page=50`,
+        `${BASE_URL}/verses/by_chapter/${surahId}?words=true&word_fields=text_qpc_hafs,text_imlaei_simple,text_uthmani_tajweed,page_number&page=${page}&per_page=50`,
         { signal }
       );
       if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);

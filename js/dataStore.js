@@ -4,7 +4,7 @@
  */
 const DataStore = (() => {
   const DB_NAME = 'quran_tajweed_db';
-  const DB_VERSION = 3;
+  const DB_VERSION = 4;
   let db = null;
 
   /**
@@ -35,6 +35,19 @@ const DataStore = (() => {
             database.deleteObjectStore('search_index');
           }
           database.createObjectStore('search_index', { keyPath: 'surah_id' });
+        }
+
+        // v4: search now uses text_imlaei_simple + new normalization.
+        // Cached surahs (no imlaei field) and old index are invalid, so wipe both.
+        if (oldVersion < 4) {
+          if (database.objectStoreNames.contains('search_index')) {
+            database.deleteObjectStore('search_index');
+          }
+          database.createObjectStore('search_index', { keyPath: 'surah_id' });
+          if (database.objectStoreNames.contains('surahs')) {
+            database.deleteObjectStore('surahs');
+          }
+          database.createObjectStore('surahs', { keyPath: 'surah_id' });
         }
       };
 
@@ -185,7 +198,7 @@ const DataStore = (() => {
   /**
    * Save one surah's search index record
    * @param {number} surahId
-   * @param {Array} entries - Array of { ayah, verse_id, normalized, normalizedAlt }
+   * @param {Array} entries - Array of { ayah, verse_id, normalized }
    * @returns {Promise<void>}
    */
   function saveSearchIndex(surahId, entries) {

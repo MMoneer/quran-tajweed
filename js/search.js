@@ -22,62 +22,161 @@ const QuranSearch = (() => {
   let exportDocBound = false;
 
   /**
-   * Normalize Arabic for search: strip diacritics, normalize letters
+   * Whole-word alif-omission exceptions derived from a full-corpus scan of
+   * text_imlaei_simple (see project-helper/alif-exceptions.json).
+   * Maps the imlaei spelling (with a written alif) to the common spelling
+   * (alif omitted) so both user spellings converge. Applied symmetrically
+   * to the index text and to queries.
+   */
+  const ALIF_EXCEPTIONS = {
+    'االاه': 'االه',
+    'اذالك': 'اذلك',
+    'افبهاذا': 'افبهذا',
+    'الاه': 'اله',
+    'الاها': 'الها',
+    'الاهك': 'الهك',
+    'الاهكم': 'الهكم',
+    'الاهلة': 'الهلة',
+    'الاهه': 'الهه',
+    'الاهين': 'الهين',
+    'الرحمان': 'الرحمن',
+    'اهاذا': 'اهذا',
+    'اهاولاء': 'اهولاء',
+    'اولايك': 'اوليك',
+    'اولايكم': 'اوليكم',
+    'بالرحمان': 'بالرحمن',
+    'بذالك': 'بذلك',
+    'بهاذا': 'بهذا',
+    'ذالك': 'ذلك',
+    'ذالكم': 'ذلكم',
+    'ذالكما': 'ذلكما',
+    'فالاهكم': 'فالهكم',
+    'فاولايك': 'فاوليك',
+    'فبذالك': 'فبذلك',
+    'فذالك': 'فذلك',
+    'فذالكم': 'فذلكم',
+    'فذالكن': 'فذلكن',
+    'فكذالك': 'فكذلك',
+    'فلذالك': 'فلذلك',
+    'فهاذا': 'فهذا',
+    'كذالك': 'كذلك',
+    'كذالكم': 'كذلكم',
+    'لاكن': 'لكن',
+    'لاكنا': 'لكنا',
+    'للرحمان': 'للرحمن',
+    'لهاذا': 'لهذا',
+    'هاذا': 'هذا',
+    'هاذان': 'هذان',
+    'هاذه': 'هذه',
+    'هاولاء': 'هولاء',
+    'والاه': 'واله',
+    'والاهكم': 'والهكم',
+    'والاهنا': 'والهنا',
+    'واولايك': 'واوليك',
+    'واولايكم': 'واوليكم',
+    'وبذالك': 'وبذلك',
+    'وذالك': 'وذلك',
+    'وذالكم': 'وذلكم',
+    'وكذالك': 'وكذلك',
+    'ولاكن': 'ولكن',
+    'ولاكنا': 'ولكنا',
+    'ولاكنكم': 'ولكنكم',
+    'ولاكنه': 'ولكنه',
+    'ولاكنهم': 'ولكنهم',
+    'ولاكني': 'ولكني',
+    'ولذالك': 'ولذلك',
+    'وهاذا': 'وهذا',
+    'وهاذه': 'وهذه',
+    'وهاولاء': 'وهولاء',
+    'رحمان': 'رحمن'
+  };
+
+  /**
+   * Apply whole-word alif-omission exceptions to normalized text
+   * @param {string} text - already whitespace-collapsed, single-spaced
+   * @returns {string}
+   */
+  function applyAlifExceptions(text) {
+    return text
+      .split(' ')
+      .map(w => ALIF_EXCEPTIONS[w] || w)
+      .join(' ');
+  }
+
+  /**
+   * Normalize Arabic for search: strip diacritics/QPC combining forms,
+   * normalize letters. Symmetric (same function for index text and query).
+   * Deliberately maps hamza-on-kursi forms (ؤ/ئ) and never maps ا -> ي.
    * @param {string} text
    * @returns {string}
    */
   function normalizeArabic(text) {
-    return text
-      .replace(/[\u064B-\u0658\u0670\u06D6-\u06ED\u06E1]/g, '')
-      .replace(/\u0640/g, '')
-      .replace(/[أإآٱٲٳ]/g, 'ا')
-      .replace(/ة/g, 'ه')
-      .replace(/ى/g, 'ي')
-      .replace(/\s+/g, ' ')
-      .trim();
+    return applyAlifExceptions(
+      text
+        .replace(/[\u064B-\u0658\u0670\u06D6-\u06ED\u06E1]/g, '')
+        .replace(/\u0640/g, '')
+        .replace(/ؤ/g, 'و')
+        .replace(/ئ/g, 'ي')
+        .replace(/[أإآٱٲٳ]/g, 'ا')
+        .replace(/ة/g, 'ه')
+        .replace(/ى/g, 'ي')
+        .replace(/\s+/g, ' ')
+        .trim()
+    );
   }
 
   /**
-   * Normalize Arabic for search, mapping QPC combining letter forms:
-   * dagger alif -> ا, small waw -> و, small/high yeh -> ي, then strips diacritics.
-   * @param {string} text
-   * @returns {string}
+   * Parse a raw query, detecting a quoted phrase.
+   * Supports ASCII "…", Arabic guillemets «…», and curly “…” quotes.
+   * @param {string} raw
+   * @returns {{ text: string, isPhrase: boolean }}
    */
-  function normalizeArabicMapped(text) {
-    return text
-      .replace(/\u0670/g, 'ا')
-      .replace(/\u06E5/g, 'و')
-      .replace(/[\u06E6\u06E7]/g, 'ي')
-      .replace(/[\u064B-\u0658\u06D6-\u06ED\u06E1]/g, '')
-      .replace(/\u0640/g, '')
-      .replace(/[أإآٱٲٳ]/g, 'ا')
-      .replace(/ة/g, 'ه')
-      .replace(/ى/g, 'ي')
-      .replace(/\s+/g, ' ')
-      .trim();
+  function parsePhraseQuery(raw) {
+    const t = (raw || '').trim();
+    const pairs = [
+      ['"', '"'],
+      ['«', '»'],
+      ['“', '”']
+    ];
+    for (const [open, close] of pairs) {
+      if (t.length >= 2 && t.startsWith(open) && t.endsWith(close)) {
+        return { text: t.slice(open.length, t.length - close.length).trim(), isPhrase: true };
+      }
+    }
+    return { text: t, isPhrase: false };
   }
 
   /**
-   * Compute the alternate (letter-mapped) normalized index text for one verse
-   * @param {Object} verse
-   * @returns {string}
+   * Find the first occurrence of a phrase in normalized text that is bounded
+   * by word boundaries (spaces or text edges) on both sides.
+   * @param {string} normalized - whitespace-collapsed, single-spaced text
+   * @param {string} phrase - normalized phrase (may span multiple words)
+   * @returns {number} start index of the match, or -1
    */
-  function verseNormalizedTextAlt(verse) {
-    const words = (verse.words || [])
-      .filter(w => w.char_type_name === 'word')
-      .map(w => w.text_qpc_hafs || '');
-    return normalizeArabicMapped(words.join(' '));
+  function findWholePhraseIndex(normalized, phrase) {
+    if (!phrase) return -1;
+    let idx = normalized.indexOf(phrase);
+    while (idx !== -1) {
+      const beforeOk = idx === 0 || normalized[idx - 1] === ' ';
+      const after = idx + phrase.length;
+      const afterOk = after >= normalized.length || normalized[after] === ' ';
+      if (beforeOk && afterOk) return idx;
+      idx = normalized.indexOf(phrase, idx + 1);
+    }
+    return -1;
   }
 
   /**
-   * Compute the normalized index text for one verse
+   * Compute the normalized index text for one verse.
+   * Uses text_imlaei_simple (imlaei spelling, alif/hamza resolved at source);
+   * falls back to text_qpc_hafs only if imlaei is missing.
    * @param {Object} verse
    * @returns {string}
    */
   function verseNormalizedText(verse) {
     const words = (verse.words || [])
       .filter(w => w.char_type_name === 'word')
-      .map(w => w.text_qpc_hafs || '');
+      .map(w => w.text_imlaei_simple || w.text_qpc_hafs || '');
     return normalizeArabic(words.join(' '));
   }
 
@@ -126,8 +225,7 @@ const QuranSearch = (() => {
             const entries = surahData.verses.map((v, i) => ({
               ayah: i + 1,
               verse_id: v.id,
-              normalized: verseNormalizedText(v),
-              normalizedAlt: verseNormalizedTextAlt(v)
+              normalized: verseNormalizedText(v)
             }));
             await DataStore.saveSearchIndex(id, entries);
           }
@@ -146,7 +244,8 @@ const QuranSearch = (() => {
    * @returns {Promise<Array|null>} results or null if superseded
    */
   async function runSearch(rawQuery) {
-    const query = normalizeArabic(rawQuery);
+    const { text, isPhrase } = parsePhraseQuery(rawQuery);
+    const query = normalizeArabic(text);
     if (!query) return [];
 
     const generation = ++searchGeneration;
@@ -158,14 +257,16 @@ const QuranSearch = (() => {
     const results = [];
     for (const record of records) {
       for (const entry of record.entries) {
-        const normMatch = entry.normalized.includes(query);
-        const alt = entry.normalizedAlt || '';
-        if (normMatch || alt.includes(query)) {
+        const hit = isPhrase
+          ? findWholePhraseIndex(entry.normalized, query) !== -1
+          : entry.normalized.includes(query);
+        if (hit) {
           results.push({
             surah_id: record.surah_id,
             ayah: entry.ayah,
             verse_id: entry.verse_id,
-            normalized: normMatch ? entry.normalized : alt
+            normalized: entry.normalized,
+            isPhrase
           });
         }
       }
@@ -175,24 +276,32 @@ const QuranSearch = (() => {
   }
 
   /**
-   * Find which word indices in a normalized ayah text contain the match range
-   * @param {string} normalized - full normalized ayah text (words joined by single spaces)
+   * Find which word indices in an ayah contain the match range.
+   * Boundaries are derived from per-word normalized tokens (not from
+   * space-splitting the joined text), so words whose imlaei text contains
+   * an internal space (e.g. "يا ايها", "۞ ان") stay mapped to one word.
+   * @param {Object} verse - surah verse with .words
    * @param {string} query - normalized query
+   * @param {boolean} isPhrase - true for whole-word phrase matching
    * @returns {Set<number>} word indices (0-based, over 'word' char_type words)
    */
-  function findMatchedWordIndices(normalized, query) {
+  function findMatchedWordIndices(verse, query, isPhrase) {
     const matches = new Set();
-    const startIdx = normalized.indexOf(query);
+    const tokens = (verse.words || [])
+      .filter(w => w.char_type_name === 'word')
+      .map(w => normalizeArabic(w.text_imlaei_simple || w.text_qpc_hafs || ''));
+    const normalized = tokens.join(' ');
+    const startIdx = isPhrase
+      ? findWholePhraseIndex(normalized, query)
+      : normalized.indexOf(query);
     if (startIdx === -1) return matches;
     const endIdx = startIdx + query.length - 1;
 
     let pos = 0;
-    const wordCount = normalized.split(' ').length;
-    for (let i = 0; i < wordCount; i++) {
-      const spaceIdx = normalized.indexOf(' ', pos);
-      const wordEnd = (spaceIdx === -1 ? normalized.length : spaceIdx) - 1;
-      if (pos <= endIdx && wordEnd >= startIdx) matches.add(i);
-      pos = spaceIdx === -1 ? normalized.length : spaceIdx + 1;
+    for (let i = 0; i < tokens.length; i++) {
+      const tokEnd = pos + tokens[i].length - 1;
+      if (pos <= endIdx && tokEnd >= startIdx) matches.add(i);
+      pos += tokens[i].length + 1;
     }
     return matches;
   }
@@ -208,7 +317,7 @@ const QuranSearch = (() => {
 
   /**
    * Build one result row's HTML string
-   * @param {Object} result - { surah_id, ayah, verse_id, normalized }
+   * @param {Object} result - { surah_id, ayah, verse_id, normalized, isPhrase }
    * @param {string} query - normalized query
    * @param {Object} nameMap - surah_id -> name_arabic
    * @returns {Promise<string>}
@@ -220,7 +329,7 @@ const QuranSearch = (() => {
 
     let ayahHtml = '';
     if (verse && verse.words) {
-      const matchedIndices = findMatchedWordIndices(result.normalized, query);
+      const matchedIndices = findMatchedWordIndices(verse, query, !!result.isPhrase);
       let wordIdx = 0;
       for (const word of verse.words) {
         if (word.char_type_name === 'word') {
@@ -254,7 +363,8 @@ const QuranSearch = (() => {
   async function renderResults(results, rawQuery) {
     const renderGeneration = searchGeneration;
     const container = document.getElementById('surah-grid');
-    const query = normalizeArabic(rawQuery);
+    const { text, isPhrase } = parsePhraseQuery(rawQuery);
+    const query = normalizeArabic(text);
     const nameMap = await loadSurahNameMap();
 
     if (results.length === 0) {
@@ -274,7 +384,7 @@ const QuranSearch = (() => {
     let html = `
       <div class="search-results-info">
         <i class="fa-solid fa-magnifying-glass"></i>
-        <span>عدد النتائج: ${toArabicIndic(total)}</span>
+        <span>عدد النتائج: ${toArabicIndic(total)}${isPhrase ? ' (بحث عبارة كاملة)' : ''}</span>
         <div class="export-wrap">
           <button type="button" class="btn-export" id="btn-export">
             <i class="fa-solid fa-download"></i> تصدير
@@ -654,7 +764,8 @@ const QuranSearch = (() => {
     if (input) input.value = query;
     if (btnClear) btnClear.style.display = query ? 'flex' : 'none';
 
-    if (!normalizeArabic(query)) {
+    const { text } = parsePhraseQuery(query);
+    if (!normalizeArabic(text)) {
       showGrid();
       return;
     }
@@ -766,9 +877,11 @@ const QuranSearch = (() => {
 
   return {
     normalizeArabic,
-    normalizeArabicMapped,
+    applyAlifExceptions,
+    ALIF_EXCEPTIONS,
+    parsePhraseQuery,
+    findWholePhraseIndex,
     verseNormalizedText,
-    verseNormalizedTextAlt,
     loadSurahNameMap,
     ensureIndexBuilt,
     runSearch,

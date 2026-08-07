@@ -3,7 +3,7 @@
  */
 const QuranAPI = (() => {
   const BASE_URL = 'https://api.quran.com/api/v4';
-  const CACHE_PREFIX = 'quran_cache_v1_';
+  const CACHE_PREFIX = 'quran_cache_v2_';
   const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days cache TTL
 
   /**
@@ -124,14 +124,15 @@ const QuranAPI = (() => {
 
   /**
    * Fetch all verses for a Surah with per-word QPC Hafs encoding.
-   * Uses word-level text_qpc_hafs for proper KFGQPC font glyph mapping.
+   * Uses word-level text_qpc_hafs for proper KFGQPC font glyph mapping
+   * and text_imlaei_simple for search normalization.
    * @param {number} chapterNumber Surah ID
    * @returns {Promise<Array>} List of verses with word-level data
    */
   async function getSurahWithQPC(chapterNumber) {
     return fetchWithCache(
       `surah_qpc_${chapterNumber}`,
-      `${BASE_URL}/verses/by_chapter/${chapterNumber}?words=true&word_fields=text_qpc_hafs,text_uthmani_tajweed,page_number`,
+      `${BASE_URL}/verses/by_chapter/${chapterNumber}?words=true&word_fields=text_qpc_hafs,text_imlaei_simple,text_uthmani_tajweed,page_number`,
       {
         paginate: true,
         perPage: 50,
@@ -262,7 +263,7 @@ const QuranAPI = (() => {
 
     while (page <= totalPages) {
       const resp = await fetch(
-        `${BASE_URL}/verses/by_chapter/${surahId}?words=true&word_fields=text_qpc_hafs,text_uthmani_tajweed,page_number&page=${page}&per_page=${PER_PAGE}`
+        `${BASE_URL}/verses/by_chapter/${surahId}?words=true&word_fields=text_qpc_hafs,text_imlaei_simple,text_uthmani_tajweed,page_number&page=${page}&per_page=${PER_PAGE}`
       );
       if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
       const json = await resp.json();
