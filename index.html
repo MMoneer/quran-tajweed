@@ -6,6 +6,12 @@
   <title>مصحف التجويد الإلكتروني | Tajweed Mushaf</title>
   <meta name="description" content="مصحف التجويد الإلكتروني التفاعلي بترميز الألوان مع إمكانية تعديل وتخصيص ألوان التجويد بالكامل">
   
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="alternate icon" href="favicon.svg">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,8 +54,8 @@
           <button id="btn-theme" class="btn-icon" title="تبديل المظهر">
             <i class="fa-solid fa-moon"></i>
           </button>
-          <button id="btn-settings" class="btn-icon" title="إعدادات الألوان والتجويد">
-            <i class="fa-solid fa-palette"></i>
+          <button id="btn-settings" class="btn-icon" title="الإعدادات">
+            <i class="fa-solid fa-gear"></i>
           </button>
         </div>
       </div>
@@ -189,11 +195,21 @@
     <!-- Right Sidebar Drawer (Settings / Customizer) -->
     <aside class="settings-drawer" id="settings-drawer">
       <div class="drawer-header">
-        <h3><i class="fa-solid fa-palette"></i> إعدادات التجويد والألوان</h3>
+        <h3><i class="fa-solid fa-gear"></i> الإعدادات</h3>
         <button id="btn-close-settings" class="btn-close"><i class="fa-solid fa-xmark"></i></button>
       </div>
       
       <div class="drawer-body">
+        <div class="settings-group">
+          <h4>الصوت والتلاوة</h4>
+          <div class="setting-item">
+            <label for="reciter-select">القارئ</label>
+            <select id="reciter-select" class="setting-select">
+              <!-- Options populated dynamically from AudioPlayer -->
+            </select>
+          </div>
+        </div>
+
         <div class="settings-group">
           <h4>مظهر وتنسيق الصفحة</h4>
           <div class="setting-item">

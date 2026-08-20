@@ -1,4 +1,13 @@
 const AudioPlayer = (() => {
+  const DEFAULT_RECITER_ID = 'Minshawy_Murattal_128kbps';
+
+  const RECITERS = [
+    { id: 'Husary_128kbps', ar: 'الحصري', url: 'https://everyayah.com/data/Husary_128kbps' },
+    { id: 'Husary_Muallim_128kbps', ar: 'الحصري (معلم)', url: 'https://everyayah.com/data/Husary_Muallim_128kbps' },
+    { id: DEFAULT_RECITER_ID, ar: 'المنشاوي', url: 'https://everyayah.com/data/Minshawy_Murattal_128kbps' },
+    { id: 'Abdul_Basit_Murattal_192kbps', ar: 'عبد الباسط', url: 'https://everyayah.com/data/Abdul_Basit_Murattal_192kbps' }
+  ];
+
   let audioEl = null;
   let currentSurahId = null;
   let currentAyahId = 1;        // per-surah local (1-N)
@@ -36,8 +45,14 @@ const AudioPlayer = (() => {
     return String(n).padStart(3, '0');
   }
 
+  function getSelectedReciter() {
+    const reciterId = SettingsManager?.state?.settings?.reciter;
+    return RECITERS.find(r => r.id === reciterId) ||
+      RECITERS.find(r => r.id === DEFAULT_RECITER_ID) || RECITERS[0];
+  }
+
   function buildAudioUrl(surahId, ayahId) {
-    return `https://everyayah.com/data/Minshawy_Murattal_128kbps/${pad3(surahId)}${pad3(ayahId)}.mp3`;
+    return `${getSelectedReciter().url}/${pad3(surahId)}${pad3(ayahId)}.mp3`;
   }
 
   function getEffectiveEnd() {
@@ -258,6 +273,23 @@ const AudioPlayer = (() => {
     playAyahLocal(localId);
   }
 
+  /**
+   * Reload the current ayah (used after changing reciter in settings).
+   * If playback was in progress the current ayah is restarted with the new
+   * reciter; otherwise the source is updated silently and play starts only
+   * on user action.
+   */
+  function reloadCurrent() {
+    if (!currentSurahId || !audioEl) return;
+    if (isPlaying) {
+      playAyahLocal(currentAyahId);
+    } else {
+      const url = buildAudioUrl(currentSurahId, currentAyahId);
+      audioEl.src = url;
+      audioEl.load();
+    }
+  }
+
   function prefetchNext(nextLocalId) {
     if (nextLocalId > totalAyahs) return;
     const url = buildAudioUrl(currentSurahId, nextLocalId);
@@ -459,5 +491,5 @@ const AudioPlayer = (() => {
     document.querySelectorAll('.verse.ayah-active').forEach(el => el.classList.remove('ayah-active'));
   }
 
-  return { init, loadSurah, togglePlay, playAyah, setAyahPosition, nextAyah, previousAyah, stop };
+  return { init, loadSurah, togglePlay, playAyah, setAyahPosition, nextAyah, previousAyah, stop, reloadCurrent, getReciters: () => RECITERS.map(r => ({ ...r })), getSelectedReciter };
 })();

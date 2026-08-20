@@ -27,7 +27,11 @@ A modern, interactive Quran reader with **Tajweed color coding**, audio playback
 - **Tajweed Rules Reference** - Dedicated page with explanations and examples
 
 ### Audio Player
-- **Recitation Playback** - High-quality Minshawy Murattal recitation
+- **Multiple Reciters** - Choose from 4 reciters in Settings:
+  - الحصري (Husary, 128kbps)
+  - الحصري (معلم) (Husary Muallim, 128kbps)
+  - المنشاوي (Minshawy Murattal, 128kbps) — default
+  - عبد الباسط (Abdul Basit Murattal, 192kbps)
 - **Play Modes**:
   - Single Ayah mode
   - Continuous Surah mode
@@ -95,7 +99,7 @@ Each component is implemented as a **Revealing Module Pattern** (IIFE) exposing 
 | `SurahIndex` | Chapter list grid, search/filter functionality |
 | `SurahViewer` | Surah reader view, navigation controls |
 | `PageRenderer` | Tajweed text processing, Uthmanic script rendering, page division |
-| `AudioPlayer` | Audio playback (EveryAyah.com), play modes, progress tracking |
+| `AudioPlayer` | Audio playback (EveryAyah.com, multiple reciters), play modes, progress tracking |
 | `TajweedRules` | Rules reference page rendering |
 
 ### SPA Routing
@@ -145,8 +149,13 @@ The app uses a sophisticated algorithm to merge Tajweed annotations:
 
 ### Audio Source
 - **Provider**: EveryAyah.com
-- **Reciter**: Minshawy Murattal (128kbps)
-- **URL Pattern**: `https://everyayah.com/data/Minshawy_Murattal_128kbps/{surah}{ayah}.mp3`
+- **Reciters**:
+  - `Husary_128kbps` — الحصري
+  - `Husary_Muallim_128kbps` — الحصري (معلم)
+  - `Minshawy_Murattal_128kbps` — المنشاوي (default)
+  - `Abdul_Basit_Murattal_192kbps` — عبد الباسط
+- **URL Pattern**: `https://everyayah.com/data/{reciter}/{surah}{ayah}.mp3`
+- Selected reciter is saved in app settings (localStorage)
 
 ---
 
@@ -228,7 +237,7 @@ No build tools required. Edit files directly:
 
 - **Quran Text**: [Quran.com API](https://quran.com) (Uthmani script)
 - **Tajweed Data**: QPC Hafs encoding from Quran.com
-- **Audio**: [EveryAyah.com](https://everyayah.com) - Minshawy Murattal recitation
+- **Audio**: [EveryAyah.com](https://everyayah.com) - Husary, Husary Muallim, Minshawy Murattal, Abdul Basit Murattal recitations
 - **Fonts**: KFGQPC HAFS Uthmanic Script
 - **Icons**: [Font Awesome 6.4](https://fontawesome.com)
 - **UI Fonts**: [Amiri Quran](https://fonts.google.com/specimen/Amiri+Quran), [Tajawal](https://fonts.google.com/specimen/Tajawal), [Outfit](https://fonts.google.com/specimen/Outfit)

@@ -27,6 +27,7 @@ const SettingsManager = (() => {
   const DEFAULT_SETTINGS = {
     theme: 'dark', // 'dark' or 'light'
     tajweedActive: true,
+    reciter: 'Minshawy_Murattal_128kbps',
     fontSize: 30, // px (default for desktop/tablet)
     // Font sizes per media type
     fontSizes: {
@@ -164,6 +165,21 @@ const SettingsManager = (() => {
   }
 
   /**
+   * Populate the reciter dropdown from the AudioPlayer config
+   */
+  function populateReciterSelect() {
+    const select = document.getElementById('reciter-select');
+    if (!select || typeof AudioPlayer === 'undefined' || !AudioPlayer.getReciters) return;
+    select.innerHTML = '';
+    AudioPlayer.getReciters().forEach(reciter => {
+      const option = document.createElement('option');
+      option.value = reciter.id;
+      option.textContent = reciter.ar;
+      select.appendChild(option);
+    });
+  }
+
+  /**
    * Get font size for current media
    */
   function getFontSizeForMedia(media) {
@@ -179,7 +195,8 @@ const SettingsManager = (() => {
     
     // Set fontSize based on current media
     state.settings.fontSize = getFontSizeForMedia(currentMedia);
-    
+
+    populateReciterSelect();
     applySettingsToDOM();
     setupEventListeners();
     setupMediaListeners();
@@ -256,6 +273,22 @@ const SettingsManager = (() => {
     const toggleTajweed = document.getElementById('toggle-tajweed-active');
     if (toggleTajweed) {
       toggleTajweed.checked = state.settings.tajweedActive;
+    }
+
+    // Apply selected reciter to the dropdown
+    const reciterSelect = document.getElementById('reciter-select');
+    if (reciterSelect && state.settings.reciter) {
+      reciterSelect.value = state.settings.reciter;
+      // Normalize a stale/invalid stored reciter id to the default so the
+      // dropdown and AudioPlayer always agree on the active reciter.
+      if (reciterSelect.value !== state.settings.reciter) {
+        const fallback = typeof AudioPlayer !== 'undefined' && AudioPlayer.getSelectedReciter
+          ? AudioPlayer.getSelectedReciter().id
+          : DEFAULT_SETTINGS.reciter;
+        state.settings.reciter = fallback;
+        reciterSelect.value = fallback;
+        saveSettingsToLocalStorage();
+      }
     }
 
     // Apply font size variable
@@ -364,6 +397,16 @@ const SettingsManager = (() => {
       state.settings.theme = state.settings.theme === 'dark' ? 'light' : 'dark';
       applySettingsToDOM();
       saveSettingsToLocalStorage();
+    });
+
+    // Reciter dropdown
+    const reciterSelect = document.getElementById('reciter-select');
+    reciterSelect?.addEventListener('change', (e) => {
+      state.settings.reciter = e.target.value;
+      saveSettingsToLocalStorage();
+      if (typeof AudioPlayer !== 'undefined' && typeof AudioPlayer.reloadCurrent === 'function') {
+        AudioPlayer.reloadCurrent();
+      }
     });
 
     // Reset colors

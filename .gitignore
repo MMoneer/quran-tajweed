@@ -7,6 +7,9 @@ docs/superpowers/
 # Build scripts (not part of app)
 scripts/
 
+# Project helper tools (temporary, not part of app)
+project-helper/
+
 # OS files
 Thumbs.db
 Desktop.ini
@@ -27,4 +30,5 @@ AGENTS.md
 *.jpeg
 *.jpg
 *.png
+!icons/*.png
 

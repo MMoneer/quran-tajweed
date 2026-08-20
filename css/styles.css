@@ -852,6 +852,36 @@ body:not(.tajweed-active) tajweed {
   color: var(--text-muted);
 }
 
+.setting-item select.setting-select {
+  height: 40px;
+  padding: 0 12px;
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-main);
+  font-family: var(--font-arabic-ui);
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238e9cae' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 10px center;
+  transition: border-color var(--transition-fast);
+}
+
+.setting-item select.setting-select:focus {
+  border-color: var(--accent);
+}
+
+.setting-item select.setting-select option {
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+
 .slider-container {
   display: flex;
   align-items: center;
