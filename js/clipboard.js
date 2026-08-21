@@ -60,12 +60,23 @@ const VerseClipboard = (() => {
     }
 
     return runs.map(run => {
-      const text = run.map(id => byId.get(id).text).join(' ');
       const first = toArabicDigits(byId.get(run[0]).num);
       const nums = run.length === 1
         ? first
         : `${first}-${toArabicDigits(byId.get(run[run.length - 1]).num)}`;
-      return `﴿${text}﴾ [${surahName}: ${nums}]`;
+
+      // Single verse: wrapped in ornate brackets
+      if (run.length === 1) {
+        return `﴿${byId.get(run[0]).text}﴾ [${surahName}: ${nums}]`;
+      }
+
+      // Multi-verse run: mushaf flow — each verse ends with its number
+      // in ornate brackets, no outer wrapper: «... ﴿١﴾ ... ﴿٢﴾»
+      const text = run.map(id => {
+        const info = byId.get(id);
+        return `${info.text} \uFD3F${toArabicDigits(info.num)}\uFD3E`;
+      }).join(' ');
+      return `${text} [${surahName}: ${nums}]`;
     }).join('\n');
   }
 
