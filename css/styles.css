@@ -2022,6 +2022,189 @@ body.light-theme .juz-divider-label {
 }
 
 /* ==========================================================================
+   Verse Copy Button (inside play popup)
+   ========================================================================== */
+.verse-play-popup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.verse-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-card);
+  color: var(--accent);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.verse-copy-btn:hover {
+  transform: scale(1.1);
+  background: var(--bg-card-hover);
+}
+
+.verse-copy-btn:active {
+  transform: scale(0.95);
+}
+
+/* ==========================================================================
+   Multi-Select Mode
+   ========================================================================== */
+.verse.ayah-selected {
+  position: relative;
+  background: rgba(212, 175, 55, 0.20);
+  border-right: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  padding-right: 8px;
+  transition: background 0.3s, border-color 0.3s;
+}
+
+/* Check badge on selected verse */
+.verse.ayah-selected::before {
+  content: '\f00c';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  position: absolute;
+  top: -10px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  z-index: 101;
+}
+
+/* Suppress native text selection while in selection mode (long-press) */
+body.selection-active .verse {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.verse {
+  -webkit-touch-callout: none;
+}
+
+/* Contextual Action Bar */
+.selection-bar {
+  position: fixed;
+  right: 50%;
+  transform: translateX(50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px;
+  background: var(--bg-card);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 999px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  z-index: 300;
+  animation: selectionBarIn 0.25s ease-out;
+}
+
+@keyframes selectionBarIn {
+  from {
+    opacity: 0;
+    transform: translateX(50%) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(50%) translateY(0);
+  }
+}
+
+.selection-count {
+  color: var(--text-main);
+  font-weight: 600;
+  font-size: 15px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.selection-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.selection-close:hover {
+  background: var(--bg-input);
+  color: var(--text-main);
+}
+
+.selection-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform 0.2s, filter 0.2s;
+}
+
+.selection-copy:hover {
+  transform: scale(1.04);
+  filter: brightness(1.08);
+}
+
+.selection-copy:active {
+  transform: scale(0.97);
+}
+
+/* ==========================================================================
+   Toast Notification
+   ========================================================================== */
+.app-toast {
+  position: fixed;
+  right: 50%;
+  transform: translateX(50%);
+  z-index: 400;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: var(--text-inverse);
+  color: var(--text-main);
+  font-weight: 600;
+  font-size: 15px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, bottom 0.25s ease;
+}
+
+.app-toast.visible {
+  opacity: 1;
+}
+
+.app-toast.error {
+  background: #b3402f;
+  color: #fff;
+}
+
+/* ==========================================================================
    App Main Audio Padding
    ========================================================================== */
 .app-main.audio-active {
