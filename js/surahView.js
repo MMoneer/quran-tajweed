@@ -4,6 +4,7 @@
 const SurahViewer = (() => {
   let currentSurahId = null;
   let currentSurahVerses = [];
+  let currentSurahData = null;
   let loadGeneration = 0;
 
   /**
@@ -42,6 +43,7 @@ const SurahViewer = (() => {
       console.log(`[Perf] Data fetch: ${fetchTime.toFixed(1)}ms for surah ${currentSurahId}`);
 
       currentSurahVerses = surahData.verses || [];
+      currentSurahData = surahData;
 
       // Render header info in app navbar
       headerInfo.innerHTML = `
@@ -380,12 +382,15 @@ const SurahViewer = (() => {
       // Update player position (without playing)
       AudioPlayer.setAyahPosition(ayahId);
 
-      // Create popup
+      // Create popup with play + copy buttons
       const popup = document.createElement('div');
       popup.className = 'verse-play-popup';
       popup.innerHTML = `
-        <button class="verse-play-btn" title="تشغيل من هذه الآية">
+        <button class="verse-play-btn" title="تشغيل من هذه الآية" aria-label="تشغيل من هذه الآية">
           <i class="fa-solid fa-play"></i>
+        </button>
+        <button class="verse-copy-btn" title="نسخ الآية" aria-label="نسخ الآية">
+          <i class="fa-regular fa-copy"></i>
         </button>
       `;
 
@@ -398,6 +403,16 @@ const SurahViewer = (() => {
         ev.stopPropagation();
         popup.remove();
         AudioPlayer.playAyah(ayahId);
+      });
+
+      // Handle copy button click
+      popup.querySelector('.verse-copy-btn').addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        popup.remove();
+        const text = VerseClipboard.buildCopyText([ayahId], currentSurahVerses, currentSurahData?.name_arabic || '');
+        const ok = await VerseClipboard.copyToClipboard(text);
+        if (ok) VerseClipboard.showToast('تم نسخ الآية');
+        else VerseClipboard.showToast('تعذّر النسخ', 'error');
       });
 
       // Auto-remove popup after 5 seconds
