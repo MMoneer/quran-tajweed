@@ -6,6 +6,9 @@ const SurahViewer = (() => {
   let currentSurahVerses = [];
   let currentSurahData = null;
   let loadGeneration = 0;
+  let selectionMode = false;
+  let selectedVerses = new Set();
+  let suppressNextVerseClick = false;
 
   /**
    * Initialize reader view for a specific Surah
@@ -44,6 +47,7 @@ const SurahViewer = (() => {
 
       currentSurahVerses = surahData.verses || [];
       currentSurahData = surahData;
+      exitSelectionMode();
 
       // Render header info in app navbar
       headerInfo.innerHTML = `
@@ -312,6 +316,8 @@ const SurahViewer = (() => {
     * Hide reader elements when leaving the view
     */
   function cleanup() {
+    exitSelectionMode();
+    currentSurahData = null;
     AudioPlayer.stop();
     currentSurahVerses = [];
     document.getElementById('tajweed-legend').classList.remove('visible');
@@ -320,6 +326,121 @@ const SurahViewer = (() => {
     const readerCard = document.querySelector('.surah-viewer-card');
     if (readerCard) readerCard.style.paddingBottom = '';
     toggleFixedNav(false);
+  }
+
+  /**
+   * Remove the verse play/copy popup if present
+   */
+  function removePlayPopup() {
+    document.querySelector('.verse-play-popup')?.remove();
+  }
+
+  /**
+   * Position a floating element above the audio player when visible
+   */
+  function positionFloatingElement(el) {
+    const audioPlayer = document.querySelector('.audio-player.visible');
+    el.style.bottom = audioPlayer ? `${audioPlayer.offsetHeight + 16}px` : '24px';
+  }
+
+  /**
+   * Enter multi-select mode with an initially selected verse
+   */
+  function enterSelectionMode(firstAyahId) {
+    selectionMode = true;
+    document.body.classList.add('selection-active');
+    removePlayPopup();
+    selectedVerses.add(firstAyahId);
+    applySelectionClasses();
+    createSelectionBar();
+    updateSelectionBar();
+  }
+
+  /**
+   * Exit multi-select mode and clear all highlights
+   */
+  function exitSelectionMode() {
+    selectionMode = false;
+    selectedVerses.clear();
+    document.body.classList.remove('selection-active');
+    document.querySelectorAll('.verse.ayah-selected').forEach(el => el.classList.remove('ayah-selected'));
+    document.getElementById('selection-bar')?.remove();
+  }
+
+  /**
+   * Toggle one verse inside selection mode.
+   * Exits mode automatically when the last verse is deselected.
+   */
+  function toggleVerseSelection(ayahId) {
+    if (selectedVerses.has(ayahId)) selectedVerses.delete(ayahId);
+    else selectedVerses.add(ayahId);
+
+    if (selectedVerses.size === 0) {
+      exitSelectionMode();
+      return;
+    }
+    applySelectionClasses();
+    updateSelectionBar();
+  }
+
+  /**
+   * Sync .ayah-selected classes with the selectedVerses set
+   */
+  function applySelectionClasses() {
+    document.querySelectorAll('.verse.ayah-selected').forEach(el => {
+      if (!selectedVerses.has(parseInt(el.dataset.ayah))) el.classList.remove('ayah-selected');
+    });
+    selectedVerses.forEach(id => {
+      const el = document.querySelector(`.verse[data-ayah="${id}"]`);
+      if (el) el.classList.add('ayah-selected');
+    });
+  }
+
+  /**
+   * Create the contextual action bar (once)
+   */
+  function createSelectionBar() {
+    if (document.getElementById('selection-bar')) return;
+
+    const bar = document.createElement('div');
+    bar.id = 'selection-bar';
+    bar.className = 'selection-bar';
+    bar.innerHTML = `
+      <button class="selection-close" id="btn-clear-selection" title="إلغاء التحديد" aria-label="إلغاء التحديد">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <span class="selection-count" id="selection-count"></span>
+      <button class="selection-copy" id="btn-copy-selection" aria-label="نسخ الآيات المحددة">
+        <i class="fa-regular fa-copy"></i>
+        <span>نسخ</span>
+      </button>
+    `;
+    document.body.appendChild(bar);
+    positionFloatingElement(bar);
+
+    bar.querySelector('#btn-clear-selection').addEventListener('click', exitSelectionMode);
+
+    bar.querySelector('#btn-copy-selection').addEventListener('click', async () => {
+      const count = selectedVerses.size;
+      const text = VerseClipboard.buildCopyText([...selectedVerses], currentSurahVerses, currentSurahData?.name_arabic || '');
+      const ok = await VerseClipboard.copyToClipboard(text);
+      if (ok) {
+        VerseClipboard.showToast(`تم نسخ ${VerseClipboard.formatAyahCount(count)}`);
+        exitSelectionMode();
+      } else {
+        VerseClipboard.showToast('تعذّر النسخ', 'error');
+      }
+    });
+  }
+
+  /**
+   * Refresh counter text and keep the bar clear of the audio player
+   */
+  function updateSelectionBar() {
+    const counter = document.getElementById('selection-count');
+    if (counter) counter.textContent = VerseClipboard.formatAyahCount(selectedVerses.size);
+    const bar = document.getElementById('selection-bar');
+    if (bar) positionFloatingElement(bar);
   }
 
   /**
@@ -360,22 +481,35 @@ const SurahViewer = (() => {
       }
     });
 
-    // Verse click → select verse + show play popup
+    // Verse click → select verse + show play popup (or multi-select toggle)
     document.addEventListener('click', (e) => {
+      if (suppressNextVerseClick) {
+        suppressNextVerseClick = false;
+        return;
+      }
+
       const verse = e.target.closest('.verse');
       if (!verse) return;
-
-      // Remove existing popup if any
-      const existingPopup = document.querySelector('.verse-play-popup');
-      if (existingPopup) existingPopup.remove();
-
-      // Check if click was on the popup itself
-      if (e.target.closest('.verse-play-popup')) return;
 
       const ayahId = parseInt(verse.dataset.ayah);
       if (isNaN(ayahId)) return;
 
-      // Select this verse visually
+      // Ctrl/Cmd+click → enter/toggle multi-select mode
+      if (e.ctrlKey || e.metaKey) {
+        if (!selectionMode) enterSelectionMode(ayahId);
+        else toggleVerseSelection(ayahId);
+        return;
+      }
+
+      if (selectionMode) {
+        toggleVerseSelection(ayahId);
+        return;
+      }
+
+      // Remove existing popup if any
+      removePlayPopup();
+
+      // Select this verse visually (playback highlight)
       document.querySelectorAll('.verse.ayah-active').forEach(el => el.classList.remove('ayah-active'));
       verse.classList.add('ayah-active');
 
@@ -423,10 +557,50 @@ const SurahViewer = (() => {
 
     // Close popup when clicking outside
     document.addEventListener('click', (e) => {
+      if (selectionMode) return; // selection mode exits only via X / Escape
       if (!e.target.closest('.verse') && !e.target.closest('.verse-play-popup')) {
-        const popup = document.querySelector('.verse-play-popup');
-        if (popup) popup.remove();
+        removePlayPopup();
       }
+    });
+
+    // Long-press (~500ms) on a verse enters multi-select mode (mobile).
+    // Cancelled when the finger moves >10px (scroll intent) or lifts early.
+    let pressTimer = null;
+    let pressOrigin = null;
+    document.addEventListener('pointerdown', (e) => {
+      if (selectionMode) return;
+      const verse = e.target.closest('.verse');
+      if (!verse) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const ayahId = parseInt(verse.dataset.ayah);
+      if (isNaN(ayahId)) return;
+      pressOrigin = { x: e.clientX, y: e.clientY };
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        suppressNextVerseClick = true;
+        enterSelectionMode(ayahId);
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, 500);
+    });
+    document.addEventListener('pointermove', (e) => {
+      if (pressTimer && pressOrigin &&
+          Math.hypot(e.clientX - pressOrigin.x, e.clientY - pressOrigin.y) > 10) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+    });
+    ['pointerup', 'pointercancel'].forEach(evt =>
+      document.addEventListener(evt, () => {
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+      })
+    );
+
+    // Escape exits selection mode
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && selectionMode) exitSelectionMode();
     });
     
     // Page navigation
