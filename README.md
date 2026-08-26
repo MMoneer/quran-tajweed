@@ -41,6 +41,14 @@ A modern, interactive Quran reader with **Tajweed color coding**, audio playback
 - **Repeat Mode** - Repeat current ayah or range
 - **Prefetching** - Next ayah audio prefetched for seamless playback
 
+### Clipboard & Sharing
+- **Single Verse Copy** - Copy button in verse popup with one-tap copying
+- **Multi-Verse Selection** - Ctrl+Click/Shift+Click for desktop; long-press for touch
+- **Bulk Copy** - Action bar appears when verses are selected; copy all selected verses at once
+- **Smart Text Formatting** - Contiguous verses merged with range indicator (e.g., "7 إلى 17")
+- **Clipboard Fallback** - Works in non-secure contexts (file://) via execCommand fallback
+- **Toast Notifications** - Success/error feedback after copy attempt
+
 ### Customization
 - **Dark/Light Theme** - Toggle between themes
 - **Font Size Adjustment** - Responsive sizing (20px-60px) with per-device defaults
@@ -65,6 +73,7 @@ quran.com/
 │   ├── api.js              # Quran.com API client with IndexedDB-first reads
 │   ├── app.js              # SPA router and lifecycle controller
 │   ├── audioPlayer.js      # Audio player component
+│   ├── clipboard.js        # Verse clipboard utilities (copy, toast, Arabic digits)
 │   ├── dataStore.js        # IndexedDB storage layer
 │   ├── dataImporter.js     # Bulk data import from API to IndexedDB
 │   ├── firstRunWizard.js   # First-launch import wizard UI
@@ -100,6 +109,7 @@ Each component is implemented as a **Revealing Module Pattern** (IIFE) exposing 
 | `SurahViewer` | Surah reader view, navigation controls |
 | `PageRenderer` | Tajweed text processing, Uthmanic script rendering, page division |
 | `AudioPlayer` | Audio playback (EveryAyah.com, multiple reciters), play modes, progress tracking |
+| `VerseClipboard` | Verse copying utilities (Arabic digits, clipboard fallback, toast notifications) |
 | `TajweedRules` | Rules reference page rendering |
 
 ### SPA Routing

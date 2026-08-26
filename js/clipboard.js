@@ -61,9 +61,13 @@ const VerseClipboard = (() => {
 
     return runs.map(run => {
       const first = toArabicDigits(byId.get(run[0]).num);
+      // Range "7-17" is bidi-ambiguous and OnlyOffice's engine mishandles it
+      // even with LRE/PDF or LRM controls (reversed or misplaced digits).
+      // The word «إلى» is strong-directional text: every engine renders it
+      // correctly with zero reliance on bidi rules or format characters.
       const nums = run.length === 1
         ? first
-        : `${first}-${toArabicDigits(byId.get(run[run.length - 1]).num)}`;
+        : `${first} إلى ${toArabicDigits(byId.get(run[run.length - 1]).num)}`;
 
       // Single verse: wrapped in ornate brackets
       if (run.length === 1) {
@@ -78,6 +82,22 @@ const VerseClipboard = (() => {
       }).join(' ');
       return `${text} [${surahName}: ${nums}]`;
     }).join('\n');
+  }
+
+  /**
+   * One-stop copy flow for a set of ayah ids:
+   * build text → copy → toast success/failure.
+   * @param {number[]} ayahIds global verse ids (any order)
+   * @param {Array} verses surah verses array (ordered by id)
+   * @param {string} surahName arabic surah name
+   * @param {string} successMsg toast message on success
+   * @returns {Promise<boolean>} success
+   */
+  async function copyVerseSet(ayahIds, verses, surahName, successMsg) {
+    const text = buildCopyText(ayahIds, verses, surahName);
+    const ok = await copyToClipboard(text);
+    showToast(ok ? successMsg : 'تعذّر النسخ', ok ? 'success' : 'error');
+    return ok;
   }
 
   /**
@@ -98,12 +118,17 @@ const VerseClipboard = (() => {
       ta.setAttribute('readonly', '');
       ta.style.position = 'fixed';
       ta.style.top = '-9999px';
+      ta.style.opacity = '0';
+      ta.style.pointerEvents = 'none';
+      ta.setAttribute('aria-hidden', 'true');
+      ta.setAttribute('tabindex', '-1');
       document.body.appendChild(ta);
       ta.select();
       ta.setSelectionRange(0, text.length);
+      // execCommand can return undefined in some legacy engines
       const ok = document.execCommand('copy');
       ta.remove();
-      return ok;
+      return !!ok;
     } catch (e) {
       return false;
     }
@@ -122,6 +147,8 @@ const VerseClipboard = (() => {
     if (!toast) {
       toast = document.createElement('div');
       toast.id = 'app-toast';
+      toast.setAttribute('role', 'status');
+      toast.setAttribute('aria-live', 'polite');
       document.body.appendChild(toast);
     }
     toast.textContent = message;
@@ -142,5 +169,5 @@ const VerseClipboard = (() => {
     toastTimer = setTimeout(() => toast.classList.remove('visible'), 2000);
   }
 
-  return { toArabicDigits, formatAyahCount, extractVerseText, buildCopyText, copyToClipboard, showToast };
+  return { toArabicDigits, formatAyahCount, extractVerseText, buildCopyText, copyVerseSet, copyToClipboard, showToast };
 })();

@@ -88,6 +88,7 @@ const App = (() => {
       const indexSection = document.getElementById('surah-index-section');
       const readerSection = document.getElementById('surah-reader-section');
       const rulesSection = document.getElementById('tajweed-rules-section');
+      const helpSection = document.getElementById('help-section');
 
       // Match pattern: #surah/(\d+)
       const surahMatch = hash.match(/^#surah\/(\d+)$/);
@@ -96,6 +97,7 @@ const App = (() => {
       indexSection.classList.remove('active');
       readerSection.classList.remove('active');
       rulesSection?.classList.remove('active');
+      helpSection?.classList.remove('active');
 
       if (hash === '#tajweed') {
         // Tajweed rules reference page
@@ -113,6 +115,11 @@ const App = (() => {
           console.error('TajweedRules not loaded');
           if (rulesSection) rulesSection.innerHTML = '<div style="padding:2rem;color:red;">TajweedRules not loaded</div>';
         }
+      } else if (hash === '#help') {
+        // Help / Instructions page
+        helpSection?.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        try { SurahViewer.cleanup(); } catch(e) { console.error('cleanup error:', e); }
       } else if (surahMatch) {
         const surahId = surahMatch[1];
         readerSection.classList.add('active');
@@ -158,6 +165,12 @@ const App = (() => {
     const btnTajweedRules = document.getElementById('btn-tajweed-rules');
     btnTajweedRules?.addEventListener('click', () => {
       window.location.hash = '#tajweed';
+    });
+
+    // Help button in header
+    const btnHelp = document.getElementById('btn-help');
+    btnHelp?.addEventListener('click', () => {
+      window.location.hash = '#help';
     });
 
     // Scroll to top button

@@ -48,6 +48,9 @@
         </div>
 
         <div class="header-left">
+          <button id="btn-help" class="btn-icon" title="التعليمات">
+            <i class="fa-solid fa-circle-info"></i>
+          </button>
           <button id="btn-tajweed-rules" class="btn-icon" title="أحكام التجويد">
             <i class="fa-solid fa-book-open"></i>
           </button>
@@ -153,6 +156,251 @@
       <section id="tajweed-rules-section" class="view-section">
         <div class="tajweed-rules-container" id="tajweed-rules-container">
           <!-- Rules content generated dynamically -->
+        </div>
+      </section>
+
+      <!-- Help / Instructions View -->
+      <section id="help-section" class="view-section">
+        <div class="help-container">
+
+          <div class="help-header">
+            <i class="fa-solid fa-circle-info help-header-icon"></i>
+            <h2>التعليمات</h2>
+            <p>دليل استخدام مصحف التجويد الإلكتروني</p>
+          </div>
+
+          <!-- Section 1: Navigation -->
+          <div class="help-section-block">
+            <h3><i class="fa-solid fa-compass"></i> التنقل والتصفح</h3>
+
+            <div class="help-card">
+              <h4>البحث</h4>
+              <p>يمكنك البحث عن أي كلمة أو كلمات في القرآن الكريم وستظهر النتائج.</p>
+              <ul>
+                <li>اكتب كلمة أو عبارة في حقل البحث ثم اضغط <kbd>Enter</kbd>.</li>
+                <li>عند استخدام علامات التنصيص يتم البحث بالضبط عن الكلمة أو الكلمات المحددة.</li>
+                <li>يمكن تصدير نتائج البحث إلى ملف نصي أو ملف <code>csv</code>.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>شريط التنقل العلوي</h4>
+              <p>يظهر شريط التنقل أعلى الصفحة عند فتح سورة ويحتوي على:</p>
+              <ul>
+                <li><strong>أزرار السورة:</strong> زر <i class="fa-solid fa-chevron-right"></i> للسورة السابقة و <i class="fa-solid fa-chevron-left"></i> للسورة التالية.</li>
+                <li><strong>رقم الصفحة:</strong> اكتب رقم الصفحة (1-604) واضغط <i class="fa-solid fa-arrow-left"></i> للانتقال إليها مباشرة.</li>
+                <li><strong>الجزء:</strong> اختر رقم الجزء (1-30) من القائمة المنسدلة واضغط <i class="fa-solid fa-arrow-left"></i> للانتقال.</li>
+                <li><strong>حجم الخط:</strong> زر <i class="fa-solid fa-plus"></i> لتكبير الخط و <i class="fa-solid fa-minus"></i> لتصغيره.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>أزرار التنقل الجانبية</h4>
+              <p>تظهر على الجانب الأيمن من الشاشة (تختفي على الهاتف):</p>
+              <ul>
+                <li><i class="fa-solid fa-chevron-up"></i> الصفحة السابقة</li>
+                <li><i class="fa-solid fa-chevron-down"></i> الصفحة التالية</li>
+                <li>رقم الصفحة الحالي بين الزرين</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>التنقل بين الآيات</h4>
+              <ul>
+                <li>اضغط على أي آية في السورة لفتح قائمة صغيرة تحتوي على زر التشغيل وزر النسخ.</li>
+                <li>تُغلق القائمة تلقائياً بعد 5 ثوانٍ، أو اضغط خارجها للإغلاق.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Section 2: Settings -->
+          <div class="help-section-block">
+            <h3><i class="fa-solid fa-gear"></i> الإعدادات</h3>
+
+            <div class="help-card">
+              <h4>فتح الإعدادات</h4>
+              <p>اضغط على زر <i class="fa-solid fa-gear"></i> في الشريط العلوي لفتح لوحة الإعدادات من الجانب.</p>
+            </div>
+
+            <div class="help-card">
+              <h4>المظهر</h4>
+              <ul>
+                <li>اضغط على زر <i class="fa-solid fa-moon"></i> / <i class="fa-solid fa-sun"></i> في الشريط العلوي للتبديل بين الوضع الداكن والفاتح.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>حجم خط الآيات</h4>
+              <p>من الإعدادات، استخدم شريط التمرير لتعديل حجم خط القرآن.</p>
+            </div>
+
+            <div class="help-card">
+              <h4>ألوان التجويد</h4>
+              <ul>
+                <li><strong>تفعيل/تعطيل:</strong> استخدم المفتاح التبديل لتشغيل أو إيقاف ألوان التجويد.</li>
+                <li><strong>تخصيص الألوان:</strong> يمكنك تغيير لون أي حكم تجويد بالضغط على مربع اللون بجانبه.</li>
+                <li><strong>إعادة الافتراضي:</strong> اضغط <i class="fa-solid fa-arrow-rotate-left"></i> افتراضي لإعادة جميع الألوان إلى قيمها الأصلية.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>القارئ</h4>
+              <p>اختر القارئ المفضل من القائمة المنسدلة في قسم الصوت والتلاوة:</p>
+              <ul>
+                <li>الحصري</li>
+                <li>الحصري (معلم)</li>
+                <li>المنشاوي</li>
+                <li>عبدالباسط عبدالصمد</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Section 3: Audio Player -->
+          <div class="help-section-block">
+            <h3><i class="fa-solid fa-headphones"></i> مشغل الصوتيات</h3>
+
+            <div class="help-card">
+              <h4>تشغيل التلاوة</h4>
+              <ul>
+                <li>اضغط على أي آية ثم اضغط زر <i class="fa-solid fa-play"></i> لبدء التلاوة من تلك الآية.</li>
+                <li>سيظهر شريط المشغل في أسفل الشاشة.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>أزرار التحكم</h4>
+              <div class="help-controls-grid">
+                <div class="help-control-item">
+                  <i class="fa-solid fa-play"></i> / <i class="fa-solid fa-pause"></i>
+                  <span>تشغيل / إيقاف</span>
+                </div>
+                <div class="help-control-item">
+                  <i class="fa-solid fa-forward-step"></i>
+                  <span>الآية التالية</span>
+                </div>
+                <div class="help-control-item">
+                  <i class="fa-solid fa-backward-step"></i>
+                  <span>الآية السابقة</span>
+                </div>
+                <div class="help-control-item">
+                  <i class="fa-solid fa-rotate-right"></i>
+                  <span>تقديم 5 ثواني</span>
+                </div>
+                <div class="help-control-item">
+                  <i class="fa-solid fa-rotate-left"></i>
+                  <span>ترجيع 5 ثواني</span>
+                </div>
+                <div class="help-control-item">
+                  <i class="fa-solid fa-volume-high"></i>
+                  <span>التحكم بالصوت / كتم الصوت</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="help-card">
+              <h4>وضع التشغيل</h4>
+              <p>اضغط على زر وضع التشغيل للتبديل بين الأوضاع:</p>
+              <ul>
+                <li><strong><i class="fa-solid fa-1"></i> آية واحدة:</strong> يُشغل الآية الحالية فقط ثم يتوقف.</li>
+                <li><strong><i class="fa-solid fa-layer-group"></i> السورة كاملة:</strong> يُكمل تلاوة السورة من الأول إلى الآخر.</li>
+                <li><strong><i class="fa-solid fa-arrows-left-right"></i> مدى محدد:</strong> يُشغل نطاقاً محدداً من الآيات. حدد رقم البداية والنهاية في الحقول الصغيرة بجانب اسم السورة.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>التكرار</h4>
+              <p>اضغط على زر <i class="fa-solid fa-repeat"></i> لتفعيل التكرار. عند التفعيل، تُعاد الآية أو النطاق تلقائياً بعد الانتهاء.</p>
+            </div>
+
+            <div class="help-card">
+              <h4>شريط التقدم</h4>
+              <p>اضغط على أي نقطة في شريط التقدم للانتقال إلى ذلك المقطع من التلاوة.</p>
+            </div>
+          </div>
+
+          <!-- Section 4: Copying -->
+          <div class="help-section-block">
+            <h3><i class="fa-solid fa-copy"></i> النسخ</h3>
+
+            <div class="help-card">
+              <h4>نسخ آية واحدة</h4>
+              <ul>
+                <li>اضغط على الآية التي تريد نسخها.</li>
+                <li>في القائمة الصغيرة التي تظهر، اضغط على زر <i class="fa-solid fa-copy"></i>.</li>
+                <li>سيتم نسخ نص الآية مع رقم السورة والآية.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>نسخ عدة آيات</h4>
+              <ul>
+                <li><strong>تحديد متعدد:</strong> اضغط <kbd>Ctrl</kbd> ثم اضغط على الآيات المطلوبة واحدة تلو الأخرى.</li>
+                <li><strong>تحديد نطاق:</strong> اضغط <kbd>Ctrl</kbd> ثم اضغط على أول آية في النطاق المطلوب، ثم اضغط <kbd>Shift</kbd> واضغط على آخر آية ليتم تحديد النطاق كاملاً.</li>
+                <li><strong>على الهاتف:</strong> اضغط مطولاً (ثانية واحدة) على أي آية لدخول وضع التحديد، ثم اضغط على الآيات الإضافية.</li>
+                <li>ستظهر شريط في أسفل الشاشة يعرض عدد الآيات المحددة وزر النسخ.</li>
+                <li>اضغط زر النسخ في الشريط لنسخ جميع الآيات المحددة دفعة واحدة.</li>
+                <li>اضغط <kbd>Esc</kbd> أو زر <i class="fa-solid fa-xmark"></i> للخروج من وضع التحديد.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>نسخ السورة كاملة</h4>
+              <p>في أعلى السورة بجانب بيانات السورة، يوجد زر نسخ السورة لنسخ السورة كاملة دفعة واحدة.</p>
+            </div>
+
+            <div class="help-card">
+              <h4>نسخ صفحة كاملة</h4>
+              <p>في عرض السورة، يوجد زر نسخ بجانب رقم الصفحة في فواصل الصفحات. اضغط عليه لنسخ جميع آيات الصفحة.</p>
+            </div>
+          </div>
+
+          <!-- Section 5: Data Management -->
+          <div class="help-section-block">
+            <h3><i class="fa-solid fa-database"></i> البيانات</h3>
+
+            <div class="help-card">
+              <h4>التحميل عند أول استخدام</h4>
+              <p>عند فتح التطبيق لأول مرة، ستظهر نافذة تطلب منك اختيار:</p>
+              <ul>
+                <li><strong>تحميل القرآن:</strong> يُحمّل جميع البيانات (~96 ميجابايت) للاستخدام بدون إنترنت. قد يستغرق 5-10 دقائق.</li>
+                <li><strong>استخدام إنترنت فقط:</strong> يعمل التطبيق عبر الاتصال بالإنترنت بدون تحميل البيانات.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>إعادة تحميل البيانات</h4>
+              <p>إذا واجهت مشكلة في عرض النصوص، يمكنك إعادة تحميل البيانات من الإعدادات:</p>
+              <ul>
+                <li>افتح الإعدادات <i class="fa-solid fa-gear"></i>.</li>
+                <li>اذهب إلى قسم إدارة البيانات.</li>
+                <li>اضغط زر <i class="fa-solid fa-rotate"></i> إعادة جلب القرآن.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>مسح البيانات المخزنة في المتصفح</h4>
+              <p>لمسح جميع بيانات القرآن المخزنة في المتصفح ( sessionStorage, IndexedDB, cache):</p>
+              <ul>
+                <li><strong>على Chrome / Edge:</strong> اضغط <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Del</kbd>، أو اذهب إلى الإعدادات → الخصوصية → مسح بيانات التصفح.</li>
+                <li><strong>على Firefox:</strong> اضغط <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Del</kbd>، أو اذهب إلى القوائم الثلاث → الإعدادات → الخصوصية → مسح البيانات.</li>
+                <li>اختر "جميع الأوقات" كنطاق زمني.</li>
+                <li>تأكد من تحديد "localStorage" و "Web databases" (أو IndexedDB) و "Cache".</li>
+                <li>اضغط زر المسح.</li>
+              </ul>
+              <p class="help-note"><i class="fa-solid fa-triangle-exclamation"></i> بعد المسح، سيطلب منك التطبيق تحميل البيانات مرة أخرى عند أول استخدام.</p>
+            </div>
+
+            <div class="help-card">
+              <h4>الأجزاء المخزنة محلياً</h4>
+              <p>يحتفظ التطبيق ببيانات مسجلة في مخزن المتصفح تلقائياً:</p>
+              <ul>
+                <li>بيانات السور (IndexedDB) — للعمل بدون إنترنت.</li>
+                <li>إعداداتك المفضلة (Theme, حجم الخط, ألوان التجويد, القارئ).</li>
+                <li>سجل البحث الأخير.</li>
+              </ul>
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -370,6 +618,17 @@
       <i class="fa-solid fa-arrow-up"></i>
     </button>
 
+    <!-- Page Navigation Buttons (Right Side) -->
+    <div id="page-nav-buttons" class="page-nav-buttons">
+      <button id="btn-prev-page" class="page-nav-btn" title="الصفحة السابقة" disabled>
+        <i class="fa-solid fa-chevron-up"></i>
+      </button>
+      <span class="page-nav-current" id="page-nav-current">1</span>
+      <button id="btn-next-page" class="page-nav-btn" title="الصفحة التالية" disabled>
+        <i class="fa-solid fa-chevron-down"></i>
+      </button>
+    </div>
+
     <!-- First-Run Wizard Modal -->
     <div id="first-run-modal" class="modal-overlay" style="display: none;">
       <div class="modal-card">
@@ -430,6 +689,7 @@
   <script src="js/search.js"></script>
   <script src="js/surahIndex.js"></script>
   <script src="js/pageRenderer.js"></script>
+  <!-- clipboard.js must precede surahView.js (surahView uses VerseClipboard) -->
   <script src="js/clipboard.js"></script>
   <script src="js/surahView.js"></script>
   <script src="js/tajweedRules.js"></script>

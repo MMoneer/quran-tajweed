@@ -8,7 +8,10 @@ const SurahViewer = (() => {
   let loadGeneration = 0;
   let selectionMode = false;
   let selectedVerses = new Set();
+  let selectionAnchorId = null;
   let suppressNextVerseClick = false;
+  let pageObserver = null;
+  let currentPageNumber = 1;
 
   /**
    * Initialize reader view for a specific Surah
@@ -63,6 +66,10 @@ const SurahViewer = (() => {
       const renderTime = performance.now() - renderStart;
       console.log(`[Perf] Render: ${renderTime.toFixed(1)}ms (${surahData.verses.length} verses)`);
       
+      // Setup page navigation buttons
+      setupPageNavigation();
+      showPageNavButtons();
+
       // Update nav buttons states
       updateNavigationControls();
       
@@ -325,6 +332,11 @@ const SurahViewer = (() => {
     document.getElementById('header-surah-info').innerHTML = '';
     const readerCard = document.querySelector('.surah-viewer-card');
     if (readerCard) readerCard.style.paddingBottom = '';
+    hidePageNavButtons();
+    if (pageObserver) {
+      pageObserver.disconnect();
+      pageObserver = null;
+    }
     toggleFixedNav(false);
   }
 
@@ -345,12 +357,14 @@ const SurahViewer = (() => {
 
   /**
    * Enter multi-select mode with an initially selected verse
+   * (that verse becomes the range anchor)
    */
   function enterSelectionMode(firstAyahId) {
     selectionMode = true;
     document.body.classList.add('selection-active');
     removePlayPopup();
     selectedVerses.add(firstAyahId);
+    selectionAnchorId = firstAyahId;
     applySelectionClasses();
     createSelectionBar();
     updateSelectionBar();
@@ -362,6 +376,7 @@ const SurahViewer = (() => {
   function exitSelectionMode() {
     selectionMode = false;
     selectedVerses.clear();
+    selectionAnchorId = null;
     document.body.classList.remove('selection-active');
     document.querySelectorAll('.verse.ayah-selected').forEach(el => el.classList.remove('ayah-selected'));
     document.getElementById('selection-bar')?.remove();
@@ -369,16 +384,50 @@ const SurahViewer = (() => {
 
   /**
    * Toggle one verse inside selection mode.
+   * Anchor behavior (Google Photos pattern):
+   * - Selecting a verse moves the anchor to it (for future range operations).
+   * - Deselecting a verse does NOT move the anchor.
+   * - Range operations (Shift+Click / long-press) are additive: they never
+   *   clear prior selections, only extend them.
    * Exits mode automatically when the last verse is deselected.
    */
   function toggleVerseSelection(ayahId) {
     if (selectedVerses.has(ayahId)) selectedVerses.delete(ayahId);
-    else selectedVerses.add(ayahId);
+    else {
+      selectedVerses.add(ayahId);
+      selectionAnchorId = ayahId;
+    }
 
     if (selectedVerses.size === 0) {
       exitSelectionMode();
       return;
     }
+    applySelectionClasses();
+    updateSelectionBar();
+  }
+
+  /**
+   * Local index of a verse inside currentSurahVerses (ordered by id)
+   */
+  function ayahIndexById(id) {
+    return currentSurahVerses.findIndex(v => v.id === id);
+  }
+
+  /**
+   * Select every verse between the anchor and target (inclusive),
+   * in either direction, across page boundaries.
+   * Range operations are additive: they never clear prior selections
+   * and never move the anchor. This matches the Google Photos model
+   * where Shift+Click extends rather than replaces.
+   */
+  function selectRange(fromId, toId) {
+    const a = ayahIndexById(fromId);
+    const b = ayahIndexById(toId);
+    if (a < 0 || b < 0) return;
+
+    const [lo, hi] = a <= b ? [a, b] : [b, a];
+    for (let i = lo; i <= hi; i++) selectedVerses.add(currentSurahVerses[i].id);
+
     applySelectionClasses();
     updateSelectionBar();
   }
@@ -421,15 +470,13 @@ const SurahViewer = (() => {
     bar.querySelector('#btn-clear-selection').addEventListener('click', exitSelectionMode);
 
     bar.querySelector('#btn-copy-selection').addEventListener('click', async () => {
-      const count = selectedVerses.size;
-      const text = VerseClipboard.buildCopyText([...selectedVerses], currentSurahVerses, currentSurahData?.name_arabic || '');
-      const ok = await VerseClipboard.copyToClipboard(text);
-      if (ok) {
-        VerseClipboard.showToast(`تم نسخ ${VerseClipboard.formatAyahCount(count)}`);
-        exitSelectionMode();
-      } else {
-        VerseClipboard.showToast('تعذّر النسخ', 'error');
-      }
+      const ok = await VerseClipboard.copyVerseSet(
+        [...selectedVerses],
+        currentSurahVerses,
+        currentSurahData?.name_arabic || '',
+        `تم نسخ ${VerseClipboard.formatAyahCount(selectedVerses.size)}`
+      );
+      if (ok) exitSelectionMode();
     });
   }
 
@@ -449,6 +496,16 @@ const SurahViewer = (() => {
   function setupNavigationListeners() {
     if (window._surahNavListenersSetup) return;
     window._surahNavListenersSetup = true;
+
+    // Reposition selection bar when audio player visibility changes
+    const audioPlayerEl = document.querySelector('.audio-player');
+    if (audioPlayerEl) {
+      const observer = new MutationObserver(() => {
+        const bar = document.getElementById('selection-bar');
+        if (bar) positionFloatingElement(bar);
+      });
+      observer.observe(audioPlayerEl, { attributes: true, attributeFilter: ['class'] });
+    }
 
     // Listen for ayah changes from audio player
     window.addEventListener('ayahchange', (e) => {
@@ -494,7 +551,23 @@ const SurahViewer = (() => {
       const ayahId = parseInt(verse.dataset.ayah);
       if (isNaN(ayahId)) return;
 
-      // Ctrl/Cmd+click → enter/toggle multi-select mode
+      // Ctrl/Cmd+Shift+Click → enter mode anchored here, or extend range from
+      // the anchor to this verse. Safe: modifier-click defaults in browsers
+      // only apply to links, verses are plain <span> elements.
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+        if (!selectionMode) enterSelectionMode(ayahId);
+        else if (selectionAnchorId != null) selectRange(selectionAnchorId, ayahId);
+        return;
+      }
+
+      // Shift+Click inside selection mode → extend range from the anchor.
+      // Outside selection mode it is ignored (normal popup behavior).
+      if (e.shiftKey && selectionMode && selectionAnchorId != null) {
+        selectRange(selectionAnchorId, ayahId);
+        return;
+      }
+
+      // Ctrl/Cmd+click → enter/toggle multi-select mode (anchor follows)
       if (e.ctrlKey || e.metaKey) {
         if (!selectionMode) enterSelectionMode(ayahId);
         else toggleVerseSelection(ayahId);
@@ -543,10 +616,7 @@ const SurahViewer = (() => {
       popup.querySelector('.verse-copy-btn').addEventListener('click', async (ev) => {
         ev.stopPropagation();
         popup.remove();
-        const text = VerseClipboard.buildCopyText([ayahId], currentSurahVerses, currentSurahData?.name_arabic || '');
-        const ok = await VerseClipboard.copyToClipboard(text);
-        if (ok) VerseClipboard.showToast('تم نسخ الآية');
-        else VerseClipboard.showToast('تعذّر النسخ', 'error');
+        await VerseClipboard.copyVerseSet([ayahId], currentSurahVerses, currentSurahData?.name_arabic || '', 'تم نسخ الآية');
       });
 
       // Auto-remove popup after 5 seconds
@@ -563,12 +633,13 @@ const SurahViewer = (() => {
       }
     });
 
-    // Long-press (~500ms) on a verse enters multi-select mode (mobile).
+    // Long-press (~500ms) on a verse: enters multi-select mode (mobile),
+    // or — when already in selection mode — selects the range from the last
+    // individually selected verse up to this one (Google Photos pattern).
     // Cancelled when the finger moves >10px (scroll intent) or lifts early.
     let pressTimer = null;
     let pressOrigin = null;
     document.addEventListener('pointerdown', (e) => {
-      if (selectionMode) return;
       const verse = e.target.closest('.verse');
       if (!verse) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -578,7 +649,11 @@ const SurahViewer = (() => {
       pressTimer = setTimeout(() => {
         pressTimer = null;
         suppressNextVerseClick = true;
-        enterSelectionMode(ayahId);
+        if (selectionMode && selectionAnchorId != null && selectionAnchorId !== ayahId) {
+          selectRange(selectionAnchorId, ayahId);
+        } else {
+          enterSelectionMode(ayahId);
+        }
         if (navigator.vibrate) navigator.vibrate(30);
       }, 500);
     });
@@ -601,6 +676,39 @@ const SurahViewer = (() => {
     // Escape exits selection mode
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && selectionMode) exitSelectionMode();
+    });
+
+    // Contextual copy actions rendered by PageRenderer (re-built each surah,
+    // so these are delegated): copy whole surah / copy a single mushaf page
+    document.addEventListener('click', async (e) => {
+      const surahBtn = e.target.closest('.copy-surah-btn');
+      if (surahBtn && currentSurahVerses.length) {
+        const ids = currentSurahVerses.map(v => v.id);
+        await VerseClipboard.copyVerseSet(
+          ids,
+          currentSurahVerses,
+          currentSurahData?.name_arabic || '',
+          `تم نسخ السورة كاملة · ${VerseClipboard.formatAyahCount(ids.length)}`
+        );
+        return;
+      }
+
+      const pageBtn = e.target.closest('.copy-page-btn');
+      if (pageBtn) {
+        const pageNumber = pageBtn.dataset.pageNumber;
+        const section = document.querySelector(`.page-section[data-page-number="${pageNumber}"]`);
+        if (!section) return;
+        const ids = [...section.querySelectorAll('.verse[data-ayah]')]
+          .map(el => parseInt(el.dataset.ayah))
+          .filter(n => !isNaN(n));
+        if (!ids.length) return;
+        await VerseClipboard.copyVerseSet(
+          ids,
+          currentSurahVerses,
+          currentSurahData?.name_arabic || '',
+          `تم نسخ الصفحة ${VerseClipboard.toArabicDigits(pageNumber)} · ${VerseClipboard.formatAyahCount(ids.length)}`
+        );
+      }
     });
     
     // Page navigation
@@ -645,12 +753,84 @@ const SurahViewer = (() => {
     });
   }
 
+  /**
+   * Setup page navigation buttons with Intersection Observer
+   */
+  function setupPageNavigation() {
+    // Clean up previous observer if any
+    if (pageObserver) {
+      pageObserver.disconnect();
+    }
+
+    const prevBtn = document.getElementById('btn-prev-page');
+    const nextBtn = document.getElementById('btn-next-page');
+    const pageNumDisplay = document.getElementById('page-nav-current');
+
+    // Reset to page 1
+    currentPageNumber = 1;
+    pageNumDisplay.textContent = '1';
+    prevBtn.disabled = true;
+    nextBtn.disabled = false;
+
+    // Create Intersection Observer to track current page
+    pageObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const pageNum = parseInt(entry.target.dataset.pageNumber);
+          if (!isNaN(pageNum)) {
+            currentPageNumber = pageNum;
+            pageNumDisplay.textContent = pageNum;
+            prevBtn.disabled = pageNum <= 1;
+            nextBtn.disabled = pageNum >= 604;
+          }
+        }
+      });
+    }, {
+      rootMargin: '-40% 0px -40% 0px',
+      threshold: 0
+    });
+
+    // Observe all page sections
+    document.querySelectorAll('.page-section').forEach(section => {
+      pageObserver.observe(section);
+    });
+
+    // Add click handlers
+    prevBtn.onclick = () => {
+      if (currentPageNumber > 1) {
+        scrollToPage(currentPageNumber - 1);
+      }
+    };
+
+    nextBtn.onclick = () => {
+      if (currentPageNumber < 604) {
+        scrollToPage(currentPageNumber + 1);
+      }
+    };
+  }
+
+  /**
+   * Show page navigation buttons
+   */
+  function showPageNavButtons() {
+    document.getElementById('page-nav-buttons')?.classList.add('visible');
+  }
+
+  /**
+   * Hide page navigation buttons
+   */
+  function hidePageNavButtons() {
+    document.getElementById('page-nav-buttons')?.classList.remove('visible');
+  }
+
   return {
     loadSurah,
     cleanup,
     setupNavigationListeners,
     populatePartSelector,
     toggleFixedNav,
-    scrollToPage
+    scrollToPage,
+    showPageNavButtons,
+    hidePageNavButtons
   };
 })();

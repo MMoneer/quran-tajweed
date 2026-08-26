@@ -674,6 +674,8 @@ body.light-theme .btn-close:hover {
 .surah-meta-details {
   display: flex;
   justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
   font-size: 13px;
   color: var(--text-muted);
@@ -1317,8 +1319,10 @@ body.light-theme .skeleton-card {
 
 /* Page Divider Styles */
 .page-divider {
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: center;
   margin: 40px 20px;
   padding: 30px 0;
   border-top: 2px solid var(--accent);
@@ -1445,6 +1449,79 @@ body.light-theme .juz-divider-label {
 
 .btn-scroll-top.visible:hover {
   transform: translateY(-2px);
+}
+
+/* ==========================================================================
+   Page Navigation Buttons (Right Side)
+   ========================================================================== */
+.page-nav-buttons {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-normal), visibility var(--transition-normal);
+}
+
+.page-nav-buttons.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.page-nav-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+.page-nav-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+.page-nav-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.page-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-nav-current {
+  font-family: var(--font-english);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  min-width: 30px;
+  text-align: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+/* Hide page nav buttons on mobile */
+@media (max-width: 768px) {
+  .page-nav-buttons {
+    display: none;
+  }
 }
 
 /* ==========================================================================
@@ -2088,13 +2165,10 @@ body.light-theme .juz-divider-label {
   z-index: 101;
 }
 
-/* Suppress native text selection while in selection mode (long-press) */
+/* Suppress native text selection & iOS callout while in selection mode (long-press) */
 body.selection-active .verse {
   user-select: none;
   -webkit-user-select: none;
-}
-
-.verse {
   -webkit-touch-callout: none;
 }
 
@@ -2173,6 +2247,68 @@ body.selection-active .verse {
 
 .selection-copy:active {
   transform: scale(0.97);
+}
+
+/* ==========================================================================
+   Contextual Copy Actions
+   ========================================================================== */
+/* Copy whole surah — pill button in the surah header banner */
+.copy-surah-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s, transform 0.2s;
+}
+
+.copy-surah-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.copy-surah-btn:active {
+  transform: scale(0.96);
+}
+
+/* Copy single page — ghost icon button on the page divider.
+   Uses negative right margin trick is fragile; instead we rely on
+   .page-divider's relative positioning and pin the button to the side
+   so the page number stays centered. */
+.copy-page-btn {
+  position: absolute;
+  inset-inline-start: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.25s, background 0.25s, transform 0.2s;
+}
+
+.copy-page-btn:hover {
+  color: var(--accent);
+  background: var(--bg-input);
+  transform: translateY(-50%) scale(1.08);
+}
+
+.copy-page-btn:active {
+  transform: translateY(-50%) scale(0.94);
 }
 
 /* ==========================================================================
@@ -2795,4 +2931,199 @@ a:focus-visible {
 .export-option:hover {
   background-color: var(--accent-light);
   color: var(--accent);
+}
+
+/* ==========================================================================
+   Help / Instructions Page
+   ========================================================================== */
+.help-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.help-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  padding: 2rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius, 16px);
+}
+
+.help-header-icon {
+  font-size: 2.5rem;
+  color: var(--accent);
+  margin-bottom: 0.8rem;
+  display: block;
+}
+
+.help-header h2 {
+  font-family: var(--font-arabic-ui);
+  font-size: 1.8rem;
+  color: var(--text-main);
+  margin: 0 0 0.4rem;
+}
+
+.help-header p {
+  font-family: var(--font-arabic-ui);
+  color: var(--text-muted);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.help-section-block {
+  margin-bottom: 2rem;
+}
+
+.help-section-block > h3 {
+  font-family: var(--font-arabic-ui);
+  font-size: 1.25rem;
+  color: var(--text-main);
+  padding-bottom: 0.6rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--accent-light);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.help-section-block > h3 i {
+  color: var(--accent);
+}
+
+.help-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.2rem 1.4rem;
+  margin-bottom: 0.8rem;
+  transition: background 0.2s ease;
+}
+
+.help-card:hover {
+  background: var(--bg-card-hover);
+}
+
+.help-card h4 {
+  font-family: var(--font-arabic-ui);
+  font-size: 1.05rem;
+  color: var(--accent);
+  margin: 0 0 0.6rem;
+}
+
+.help-card p {
+  font-family: var(--font-arabic-ui);
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.8;
+  margin: 0 0 0.5rem;
+}
+
+.help-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+}
+
+.help-card ul li {
+  font-family: var(--font-arabic-ui);
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.9;
+  padding: 0.25rem 0;
+  padding-inline-start: 1.2rem;
+  position: relative;
+}
+
+.help-card ul li::before {
+  content: "\2022";
+  color: var(--accent);
+  position: absolute;
+  inset-inline-start: 0;
+  font-weight: bold;
+}
+
+.help-card ul li strong {
+  color: var(--text-main);
+}
+
+.help-card ul li i {
+  color: var(--accent);
+  margin: 0 0.15rem;
+}
+
+.help-card kbd {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.8rem;
+  font-family: monospace;
+  color: var(--text-main);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+.help-note {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.9rem !important;
+}
+
+.help-note i {
+  color: #ffc107 !important;
+  margin-inline-end: 0.4rem;
+}
+
+.help-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.help-control-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  background: var(--bg-input);
+  border-radius: 8px;
+  font-family: var(--font-arabic-ui);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.help-control-item i {
+  color: var(--accent);
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .help-container {
+    padding: 1rem;
+  }
+
+  .help-header {
+    padding: 1.5rem 1rem;
+  }
+
+  .help-header h2 {
+    font-size: 1.4rem;
+  }
+
+  .help-card {
+    padding: 1rem;
+  }
+
+  .help-controls-grid {
+    grid-template-columns: 1fr;
+  }
 }

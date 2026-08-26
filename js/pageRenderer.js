@@ -180,6 +180,9 @@ const PageRenderer = (() => {
   function createPageDividerHTML(pageNumber) {
     return `<div class="page-divider">
       <div class="divider-line"></div>
+      <button type="button" class="copy-page-btn" data-page-number="${pageNumber}" title="نسخ هذه الصفحة" aria-label="نسخ صفحة ${pageNumber}">
+        <i class="fa-regular fa-copy"></i>
+      </button>
       <span class="page-number">${pageNumber}</span>
       <div class="divider-line"></div>
     </div>`;
@@ -220,6 +223,10 @@ const PageRenderer = (() => {
         <span><i class="fa-solid fa-location-dot"></i> مكان النزول: ${revelationPlaceAr}</span>
         <span><i class="fa-solid fa-arrow-down-1-9"></i> آياتها: ${verses.length}</span>
         <span><i class="fa-solid fa-book-quran"></i> ترتيبها: ${currentSurahId}</span>
+        <button type="button" class="copy-surah-btn" title="نسخ السورة كاملة" aria-label="نسخ السورة كاملة">
+          <i class="fa-regular fa-copy"></i>
+          <span>نسخ السورة</span>
+        </button>
       </div>`;
 
     if (bismillah_pre) {
