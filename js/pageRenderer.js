@@ -308,7 +308,19 @@ const PageRenderer = (() => {
       }
     }
 
-    return segments.join('');
+    let result = segments.join('');
+
+    // Keep combining marks attached to their base letter. The tajweed span above
+    // wraps a base (e.g. madd alef) but can leave a trailing combining mark (tanween,
+    // sukun, small-high sign, maddah, ...) OUTSIDE the element. That boundary breaks
+    // HarfBuzz mark-to-base positioning, dropping the mark to the baseline / overlapping
+    // the alef. Pull any trailing combining mark back inside the preceding </tajweed>.
+    result = result.replace(
+      /<\/tajweed>([\u064B-\u065F\u0670\u06D6-\u06ED]+)/g,
+      '$1</tajweed>'
+    );
+
+    return result;
   }
   
   return {
