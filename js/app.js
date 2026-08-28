@@ -22,6 +22,14 @@ const App = (() => {
       return;
     }
 
+    // 0b. Register Service Worker for offline app-shell caching
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js', { scope: './' })
+          .catch((e) => console.error('SW registration failed:', e));
+      });
+    }
+
     // 1. Check for first-run
     const onlineOnly = localStorage.getItem('quran_online_only') === 'true';
     const hasData = await DataStore.hasData();
