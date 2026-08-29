@@ -21,6 +21,8 @@ const AudioPlayer = (() => {
   let isMuted = false;
   let previousVolume = 0.8;
   let surahVerses = [];
+  let sessionPlayedAny = false; // has any ayah successfully started in this session?
+  let consecutiveErrors = 0;    // errors with no successful playback between them
 
   let playerEl = null;
   let playBtn = null;
@@ -193,12 +195,34 @@ const AudioPlayer = (() => {
       isPlaying = false;
       playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
       playBtn.classList.remove('active');
-      // Try to skip to next ayah on failure (only in surah/range mode)
+
+      consecutiveErrors++;
+
+      const err = audioEl.error;
+      const isNetworkError =
+        !navigator.onLine || (err && err.code === MediaError.MEDIA_ERR_NETWORK);
+
+      // Offline / unreachable server: every ayah would fail, so cascading
+      // through the whole surah is wrong. Also stop if we have failed twice in
+      // a row (systemic failure) or never managed to play anything this
+      // session — both mean the connection is down, not a single missing file.
+      if (isNetworkError || consecutiveErrors >= 2 || !sessionPlayedAny) {
+        consecutiveErrors = 0;
+        VerseClipboard.showToast('تعذّر تشغيل التلاوة: تحقّق من اتصال الإنترنت', 'error');
+        return;
+      }
+
+      // Genuine isolated failure (e.g. a single missing file) — skip to next.
       if (playMode !== 'ayah' && currentAyahId < totalAyahs) {
         setTimeout(() => {
           playAyahLocal(currentAyahId + 1);
         }, 500);
       }
+    });
+
+    audioEl.addEventListener('playing', () => {
+      sessionPlayedAny = true;
+      consecutiveErrors = 0;
     });
 
     updatePlayModeUI();
@@ -212,6 +236,8 @@ const AudioPlayer = (() => {
     surahVerses = verses || [];
     currentGlobalAyahId = localToGlobal(currentAyahId);
     isPlaying = false;
+    sessionPlayedAny = false;
+    consecutiveErrors = 0;
 
     rangeStart = null;
     rangeEnd = null;
