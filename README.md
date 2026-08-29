@@ -208,7 +208,7 @@ The app can be installed on Android and iOS as a Progressive Web App:
 4. Tap **Add** to confirm
 
 **Offline Use:**
-After first launch, follow the import wizard to download all 114 surahs. The app works fully offline — Quran text, Tajweed rules, and audio are all cached automatically.
+After first launch, follow the import wizard to download all 114 surahs. Quran text and Tajweed rules work fully offline. Audio requires an internet connection (streamed from EveryAyah.com).
 
 ---
 
