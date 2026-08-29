@@ -192,6 +192,24 @@ No build tools required. Edit files directly:
 - `js/*.js` - Module files (edit any independently)
 - `data/juz-data.js` - Juz/Surah page mapping
 
+### Mobile Installation (PWA)
+The app can be installed on Android and iOS as a Progressive Web App:
+
+**Android (Chrome/Edge):**
+1. Open the app URL in Chrome or Edge
+2. Tap **"Add to Home Screen"** when prompted, or
+3. Tap the **⋮ menu** → **"Install app"** / **"Add to Home Screen"**
+4. The app icon will appear on your home screen
+
+**iOS (Safari):**
+1. Open the app URL in Safari
+2. Tap the **Share button** (square with arrow ↑)
+3. Scroll down and tap **"Add to Home Screen"**
+4. Tap **Add** to confirm
+
+**Offline Use:**
+After first launch, follow the import wizard to download all 114 surahs. The app works fully offline — Quran text, Tajweed rules, and audio are all cached automatically.
+
 ---
 
 ## Tajweed Rules Reference
