@@ -254,7 +254,7 @@ a {
 .header-surah-badge {
   background: var(--accent-light);
   border: 1px solid var(--border-gold);
-  padding: 6px 16px;
+  padding: 8px 20px;
   border-radius: 30px;
   font-weight: 700;
   color: var(--accent);
@@ -269,6 +269,99 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ==========================================================================
+   Header Dropdown Menu
+   ========================================================================== */
+.header-menu-wrapper {
+  position: relative;
+}
+
+.btn-menu {
+  position: relative;
+}
+
+.header-dropdown {
+  position: fixed;
+  top: 56px;
+  right: 24px;
+  min-width: 200px;
+  background: var(--bg-dropdown);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: opacity var(--transition-fast), visibility var(--transition-fast), transform var(--transition-fast);
+  z-index: 1000;
+  overflow: visible;
+}
+
+.header-dropdown.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  color: var(--text-main);
+  font-size: 15px;
+  font-weight: 500;
+  transition: background var(--transition-fast);
+  cursor: pointer;
+  white-space: nowrap;
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: start;
+  font-family: inherit;
+}
+
+.dropdown-item:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.dropdown-item i {
+  width: 18px;
+  text-align: center;
+  color: var(--accent);
+}
+
+/* Desktop: show home icon, no dropdown */
+@media (min-width: 769px) {
+  .btn-menu i {
+    display: none;
+  }
+
+  .btn-menu::before {
+    content: "\f015";  /* fa-house */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    font-size: 18px;
+  }
+
+  .header-dropdown {
+    display: none;
+  }
+}
+
+/* Mobile: show hamburger icon and dropdown */
+@media (max-width: 768px) {
+  .btn-menu::before {
+    display: none;
+  }
+
+  .header-dropdown {
+    right: 16px;
+    min-width: 180px;
+  }
 }
 
 /* ==========================================================================
@@ -1231,7 +1324,12 @@ body.light-theme .skeleton-card {
 
   .header-surah-badge {
     font-size: 10px;
-    padding: 2px;
+    padding: 4px 10px;
+  }
+
+  /* Hide desktop-only icons on mobile (they're in the dropdown instead) */
+  .header-desktop-icon {
+    display: none;
   }
   
   .surah-viewer-card {

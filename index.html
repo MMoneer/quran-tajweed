@@ -36,9 +36,11 @@
               <p>Tajweed Mushaf</p>
             </div>
           </a>
-          <button id="btn-index" class="btn-icon" title="الفهرس">
-            <i class="fa-solid fa-bars"></i>
-          </button>
+          <div class="header-menu-wrapper">
+            <button id="btn-menu" class="btn-icon btn-menu" title="القائمة" aria-expanded="false" aria-haspopup="true">
+              <i class="fa-solid fa-bars"></i>
+            </button>
+          </div>
         </div>
         
         <div class="header-center" id="header-surah-info">
@@ -46,21 +48,41 @@
         </div>
 
         <div class="header-left">
-          <button id="btn-help" class="btn-icon" title="التعليمات">
-            <i class="fa-solid fa-circle-info"></i>
-          </button>
-          <button id="btn-tajweed-rules" class="btn-icon" title="أحكام التجويد">
-            <i class="fa-solid fa-book-open"></i>
+          <button id="btn-settings" class="btn-icon header-desktop-icon" title="الإعدادات">
+            <i class="fa-solid fa-gear"></i>
           </button>
           <button id="btn-theme" class="btn-icon" title="تبديل المظهر">
             <i class="fa-solid fa-moon"></i>
           </button>
-          <button id="btn-settings" class="btn-icon" title="الإعدادات">
-            <i class="fa-solid fa-gear"></i>
+          <button id="btn-tajweed-rules" class="btn-icon header-desktop-icon" title="أحكام التجويد">
+            <i class="fa-solid fa-book-open"></i>
+          </button>
+          <button id="btn-help" class="btn-icon header-desktop-icon" title="التعليمات">
+            <i class="fa-solid fa-circle-info"></i>
           </button>
         </div>
       </div>
     </header>
+
+    <!-- Header Dropdown Menu (outside header for proper z-index stacking) -->
+    <div class="header-dropdown" id="header-dropdown" role="menu">
+      <button class="dropdown-item" id="btn-index" role="menuitem">
+        <i class="fa-solid fa-house"></i>
+        <span>الرئيسية</span>
+      </button>
+      <button class="dropdown-item" id="btn-settings-dropdown" role="menuitem">
+        <i class="fa-solid fa-gear"></i>
+        <span>الإعدادات</span>
+      </button>
+      <button class="dropdown-item" id="btn-tajweed-rules-dropdown" role="menuitem">
+        <i class="fa-solid fa-book-open"></i>
+        <span>أحكام التجويد</span>
+      </button>
+      <button class="dropdown-item" id="btn-help-dropdown" role="menuitem">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>التعليمات</span>
+      </button>
+    </div>
 
     <!-- Fixed Navigation Bar (outside view-section to avoid transform breaking position:fixed) -->
     <nav id="fixed-nav" class="fixed-nav">

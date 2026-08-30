@@ -154,10 +154,56 @@ const App = (() => {
    * General UI elements action listeners
    */
   function setupGlobalEventListeners() {
-    // Index button in header
+    // Header button: home navigation on desktop, dropdown toggle on mobile
+    const btnMenu = document.getElementById('btn-menu');
+    const headerDropdown = document.getElementById('header-dropdown');
+
+    btnMenu?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        // Mobile: toggle dropdown menu
+        if (headerDropdown && btnMenu) {
+          const rect = btnMenu.getBoundingClientRect();
+          headerDropdown.style.top = (rect.bottom + 8) + 'px';
+          headerDropdown.style.right = (window.innerWidth - rect.right) + 'px';
+        }
+        headerDropdown?.classList.toggle('open');
+        btnMenu?.setAttribute('aria-expanded', headerDropdown?.classList.contains('open') ? 'true' : 'false');
+      } else {
+        // Desktop: navigate to home
+        const hash = window.location.hash;
+        if (hash === '' || hash === '#') {
+          if (typeof QuranSearch !== 'undefined') {
+            QuranSearch.clearSearch();
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          window.location.hash = '';
+        }
+      }
+    });
+
+    // Close dropdown when clicking outside (mobile only)
+    document.addEventListener('click', (e) => {
+      if (headerDropdown && !headerDropdown.contains(e.target) && e.target !== btnMenu) {
+        headerDropdown.classList.remove('open');
+        btnMenu?.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    // Close dropdown on Escape key (mobile only)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && headerDropdown?.classList.contains('open')) {
+        headerDropdown.classList.remove('open');
+        btnMenu?.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    // Index/Home button in dropdown (mobile)
     const btnIndex = document.getElementById('btn-index');
     btnIndex?.addEventListener('click', () => {
-      // If already on the index view, dismiss any active search (escape hatch)
+      headerDropdown?.classList.remove('open');
       const hash = window.location.hash;
       if (hash === '' || hash === '#') {
         if (typeof QuranSearch !== 'undefined') {
@@ -169,15 +215,35 @@ const App = (() => {
       }
     });
 
-    // Tajweed rules button in header
-    const btnTajweedRules = document.getElementById('btn-tajweed-rules');
-    btnTajweedRules?.addEventListener('click', () => {
+    // Settings button in dropdown
+    const btnSettingsDropdown = document.getElementById('btn-settings-dropdown');
+    btnSettingsDropdown?.addEventListener('click', () => {
+      headerDropdown?.classList.remove('open');
+      const settingsDrawer = document.getElementById('settings-drawer');
+      const drawerOverlay = document.getElementById('drawer-overlay');
+      settingsDrawer?.classList.add('open');
+      drawerOverlay?.classList.add('visible');
+    });
+
+    // Tajweed rules button in dropdown
+    const btnTajweedRulesDropdown = document.getElementById('btn-tajweed-rules-dropdown');
+    btnTajweedRulesDropdown?.addEventListener('click', () => {
+      headerDropdown?.classList.remove('open');
       window.location.hash = '#tajweed';
     });
 
-    // Help button in header
-    const btnHelp = document.getElementById('btn-help');
-    btnHelp?.addEventListener('click', () => {
+    // Help button in dropdown
+    const btnHelpDropdown = document.getElementById('btn-help-dropdown');
+    btnHelpDropdown?.addEventListener('click', () => {
+      headerDropdown?.classList.remove('open');
+      window.location.hash = '#help';
+    });
+
+    // Desktop header icons (always visible on desktop, hidden on mobile via CSS)
+    document.getElementById('btn-tajweed-rules')?.addEventListener('click', () => {
+      window.location.hash = '#tajweed';
+    });
+    document.getElementById('btn-help')?.addEventListener('click', () => {
       window.location.hash = '#help';
     });
 
