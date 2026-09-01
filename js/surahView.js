@@ -13,6 +13,14 @@ const SurahViewer = (() => {
   let pageObserver = null;
   let currentPageNumber = 1;
 
+  let swipeStartX = 0;
+  let swipeStartY = 0;
+  let swipeDeltaX = 0;
+  let isSwiping = false;
+  let swipeOverlay = null;
+  let swipeHintLeft = null;
+  let swipeHintRight = null;
+
   /**
    * Initialize reader view for a specific Surah
    * @param {number} surahId
@@ -75,6 +83,7 @@ const SurahViewer = (() => {
       
       // Setup navigation listeners
       setupNavigationListeners();
+      setupSwipeNavigation();
       
       // Load audio player for this surah (with optional start ayah)
       const startAyah = window._pendingAyahScroll || 1;
@@ -823,10 +832,155 @@ const SurahViewer = (() => {
     document.getElementById('page-nav-buttons')?.classList.remove('visible');
   }
 
+  function setupSwipeNavigation() {
+    if (window._swipeNavSetup) return;
+    window._swipeNavSetup = true;
+
+    const container = document.getElementById('surah-content-container');
+    if (!container) return;
+
+    // Create overlay element
+    swipeOverlay = document.createElement('div');
+    swipeOverlay.className = 'swipe-overlay';
+    document.body.appendChild(swipeOverlay);
+
+    // Create hint arrows
+    swipeHintLeft = document.createElement('div');
+    swipeHintLeft.className = 'swipe-hint swipe-hint-left';
+    swipeHintLeft.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+    document.body.appendChild(swipeHintLeft);
+
+    swipeHintRight = document.createElement('div');
+    swipeHintRight.className = 'swipe-hint swipe-hint-right';
+    swipeHintRight.innerHTML = '<i class="fa-solid fa-chevron-left"></i>';
+    document.body.appendChild(swipeHintRight);
+
+    const THRESHOLD = 80;
+    const MAX_DRAG = 200;
+
+    container.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      swipeStartX = touch.clientX;
+      swipeStartY = touch.clientY;
+      swipeDeltaX = 0;
+      isSwiping = false;
+      container.classList.remove('swiping', 'snapping-back');
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - swipeStartX;
+      const dy = touch.clientY - swipeStartY;
+
+      // Determine if this is a horizontal swipe (not vertical scroll)
+      if (!isSwiping) {
+        // Need at least 10px movement to decide direction
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        // If vertical movement is dominant, abort swipe
+        if (Math.abs(dy) > Math.abs(dx)) return;
+        // Must be on mobile/tablet (touch device)
+        if (!matchMedia('(pointer: coarse)').matches) return;
+        isSwiping = true;
+        document.body.classList.add('swipe-active');
+        swipeOverlay.classList.add('active');
+      }
+
+      if (!isSwiping) return;
+
+      e.preventDefault();
+
+      // Clamp delta with resistance at edges
+      swipeDeltaX = dx;
+      const absDx = Math.abs(swipeDeltaX);
+      const clampedDelta = absDx > MAX_DRAG
+        ? Math.sign(swipeDeltaX) * (MAX_DRAG + (absDx - MAX_DRAG) * 0.3)
+        : swipeDeltaX;
+
+      // Apply transform
+      container.classList.add('swiping');
+      container.classList.remove('snapping-back');
+      container.style.transform = `translateX(${clampedDelta}px)`;
+
+      // Show/hide hint arrows based on direction and current surah bounds
+      if (swipeDeltaX > 20 && currentSurahId > 1) {
+        // Swiping right → previous surah
+        swipeHintLeft.classList.add('visible');
+        swipeHintRight.classList.remove('visible');
+      } else if (swipeDeltaX < -20 && currentSurahId < 114) {
+        // Swiping left → next surah
+        swipeHintRight.classList.add('visible');
+        swipeHintLeft.classList.remove('visible');
+      } else {
+        swipeHintLeft.classList.remove('visible');
+        swipeHintRight.classList.remove('visible');
+      }
+    }, { passive: false });
+
+    container.addEventListener('touchend', (e) => {
+      if (!isSwiping) return;
+
+      isSwiping = false;
+      document.body.classList.remove('swipe-active');
+      swipeOverlay.classList.remove('active');
+      swipeHintLeft.classList.remove('visible');
+      swipeHintRight.classList.remove('visible');
+
+      const absDx = Math.abs(swipeDeltaX);
+
+      if (absDx >= THRESHOLD) {
+        // Determine direction: RTL → right = prev, left = next
+        const direction = swipeDeltaX > 0 ? 'prev' : 'next';
+        const targetId = direction === 'prev' ? currentSurahId - 1 : currentSurahId + 1;
+
+        if (targetId >= 1 && targetId <= 114) {
+          // Animate slide out then navigate
+          const slideOut = swipeDeltaX > 0 ? 300 : -300;
+          container.classList.add('swiping');
+          container.classList.remove('snapping-back');
+          container.style.transform = `translateX(${slideOut}px)`;
+          container.style.opacity = '0.5';
+
+          setTimeout(() => {
+            container.style.transform = '';
+            container.style.opacity = '';
+            container.classList.remove('swiping');
+            window.location.hash = `#surah/${targetId}`;
+          }, 250);
+        } else {
+          snapBack(container);
+        }
+      } else {
+        snapBack(container);
+      }
+    }, { passive: true });
+
+    container.addEventListener('touchcancel', () => {
+      if (!isSwiping) return;
+      isSwiping = false;
+      document.body.classList.remove('swipe-active');
+      swipeOverlay.classList.remove('active');
+      swipeHintLeft.classList.remove('visible');
+      swipeHintRight.classList.remove('visible');
+      snapBack(container);
+    }, { passive: true });
+  }
+
+  function snapBack(container) {
+    container.classList.remove('swiping');
+    container.classList.add('snapping-back');
+    container.style.transform = '';
+    setTimeout(() => {
+      container.classList.remove('snapping-back');
+    }, 200);
+  }
+
   return {
     loadSurah,
     cleanup,
     setupNavigationListeners,
+    setupSwipeNavigation,
     populatePartSelector,
     toggleFixedNav,
     scrollToPage,
