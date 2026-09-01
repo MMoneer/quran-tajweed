@@ -347,6 +347,20 @@ const SurahViewer = (() => {
       pageObserver = null;
     }
     toggleFixedNav(false);
+    // Remove swipe navigation elements
+    if (swipeOverlay) {
+      swipeOverlay.remove();
+      swipeOverlay = null;
+    }
+    if (swipeHintLeft) {
+      swipeHintLeft.remove();
+      swipeHintLeft = null;
+    }
+    if (swipeHintRight) {
+      swipeHintRight.remove();
+      swipeHintRight = null;
+    }
+    document.body.classList.remove('swipe-active');
   }
 
   /**
