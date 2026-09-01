@@ -920,14 +920,15 @@ const SurahViewer = (() => {
       container.style.transform = `translateX(${clampedDelta}px)`;
 
       // Show/hide hint arrows based on direction and current surah bounds
-      if (swipeDeltaX > 20 && currentSurahId > 1) {
-        // Swiping right → previous surah
-        swipeHintLeft.classList.add('visible');
-        swipeHintRight.classList.remove('visible');
-      } else if (swipeDeltaX < -20 && currentSurahId < 114) {
-        // Swiping left → next surah
+      // RTL: swipe right = next surah, swipe left = previous surah
+      if (swipeDeltaX > 20 && currentSurahId < 114) {
+        // Swiping right → next surah
         swipeHintRight.classList.add('visible');
         swipeHintLeft.classList.remove('visible');
+      } else if (swipeDeltaX < -20 && currentSurahId > 1) {
+        // Swiping left → previous surah
+        swipeHintLeft.classList.add('visible');
+        swipeHintRight.classList.remove('visible');
       } else {
         swipeHintLeft.classList.remove('visible');
         swipeHintRight.classList.remove('visible');
@@ -946,9 +947,9 @@ const SurahViewer = (() => {
       const absDx = Math.abs(swipeDeltaX);
 
       if (absDx >= THRESHOLD) {
-        // Determine direction: RTL → right = prev, left = next
-        const direction = swipeDeltaX > 0 ? 'prev' : 'next';
-        const targetId = direction === 'prev' ? currentSurahId - 1 : currentSurahId + 1;
+        // RTL: swipe right = next surah, swipe left = previous surah
+        const direction = swipeDeltaX > 0 ? 'next' : 'prev';
+        const targetId = direction === 'next' ? currentSurahId + 1 : currentSurahId - 1;
 
         if (targetId >= 1 && targetId <= 114) {
           // Animate slide out then navigate
