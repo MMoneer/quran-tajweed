@@ -361,6 +361,7 @@ const SurahViewer = (() => {
       swipeHintRight = null;
     }
     document.body.classList.remove('swipe-active');
+    window._swipeNavSetup = false;
   }
 
   /**
@@ -884,6 +885,7 @@ const SurahViewer = (() => {
 
     container.addEventListener('touchmove', (e) => {
       if (e.touches.length !== 1) return;
+      if (selectionMode) return;
       const touch = e.touches[0];
       const dx = touch.clientX - swipeStartX;
       const dy = touch.clientY - swipeStartY;
