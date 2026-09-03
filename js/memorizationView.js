@@ -222,6 +222,17 @@ const MemorizationView = (() => {
       // Best-effort: warm the surah name cache for richer labels.
       await ensureSurahNameMap();
 
+      // Best-effort: build the mushaf page → ayah index used by page-mode
+      // planning. Failures are non-fatal — page mode simply won't be
+      // available until the next reload.
+      if (typeof PageIndex !== 'undefined') {
+        try {
+          await PageIndex.build();
+        } catch (e) {
+          console.warn('MemorizationView.init: PageIndex.build failed', e);
+        }
+      }
+
       // Cross-tab sync: when another tab updates state, re-render.
       window.addEventListener('storage', (event) => {
         if (!event || !event.key) return;

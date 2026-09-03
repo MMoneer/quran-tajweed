@@ -53,30 +53,19 @@ const QuranMetaService = (() => {
 
   /**
    * Return the 1-based mushaf page (1..604) containing the given ayah.
-   * Uses SURAH_START_PAGES (loaded from data/juz-data.js) and the
-   * standard ~15-ayahs-per-page approximation. v1: returns the page
-   * that contains (surah, ayah) given the surah's start page and a
-   * walk forward until the next surah starts.
+   * Uses PageIndex (built from imported surah verses' word-level
+   * page_number) when available — that gives the canonical mushaf
+   * mapping. Returns null if PageIndex is unavailable or the surah is
+   * not yet indexed.
    * @returns {number|null}
    */
   function getPageOf(surah, ayah) {
     if (!isValidAyah(surah, ayah)) return null;
-    if (typeof SURAH_START_PAGES === 'undefined' || !Array.isArray(SURAH_START_PAGES)) {
-      return null;
+    const cached = (typeof PageIndex !== 'undefined') ? PageIndex.getCached() : null;
+    if (cached && cached.ayahToPage[surah] && cached.ayahToPage[surah][ayah - 1] !== undefined) {
+      return cached.ayahToPage[surah][ayah - 1];
     }
-    const startPage = SURAH_START_PAGES[surah];
-    let nextSurahStartPage = TOTAL_PAGES + 1;
-    if (surah < TOTAL_SURAHS) {
-      for (let i = surah + 1; i <= TOTAL_SURAHS; i++) {
-        if (SURAH_START_PAGES[i] > startPage) {
-          nextSurahStartPage = SURAH_START_PAGES[i];
-          break;
-        }
-      }
-    }
-    const ayahsFromSurahStart = ayah - 1;
-    const offset = Math.floor(ayahsFromSurahStart / 15);
-    return Math.min(startPage + offset, nextSurahStartPage - 1);
+    return null;
   }
 
   /**
@@ -215,91 +204,29 @@ const QuranMetaService = (() => {
 
   /**
    * Build a memorization range covering exactly one mushaf page starting
-   * at `startPage` (1..604). Walks forward ayah-by-ayah, stopping when
-   * the next ayah would advance to startPage+1 OR the Quran ends.
+   * at `startPage` (1..604). Looks up the page's ayah range in PageIndex.
+   * Returns null if PageIndex is unavailable.
    *
-   * v1 approximation: a mushaf page contains ~15 ayahs within a surah.
-   * We use a per-page budget and consume exactly one page worth.
+   * v1 (deprecated): used a `/15 ayahs per page` approximation that was
+   * inaccurate for surahs with variable page density.
    *
    * @returns {{fromSurah:number, fromAyah:number, toSurah:number, toAyah:number, count:number, isCompleted:boolean}|null}
    */
   function calculateNextPageRange(startPage) {
-    if (typeof SURAH_START_PAGES === 'undefined' || !Array.isArray(SURAH_START_PAGES)) {
-      return null;
-    }
     if (!Number.isInteger(startPage) || startPage < 1 || startPage > TOTAL_PAGES) {
       return null;
     }
-    const AYAH_PER_PAGE = 15;
-
-    // Find the surah whose start page is <= startPage and the next surah
-    // starts at a page > startPage (i.e. the surah `startPage` belongs to).
-    let surah = 1;
-    for (let i = 1; i <= TOTAL_SURAHS; i++) {
-      if (SURAH_START_PAGES[i] <= startPage) {
-        surah = i;
-      } else {
-        break;
-      }
-    }
-
-    // Compute the starting ayah within `surah` for `startPage`.
-    const surahStartPage = SURAH_START_PAGES[surah];
-    let nextSurahStartPage = TOTAL_PAGES + 1;
-    if (surah < TOTAL_SURAHS) {
-      nextSurahStartPage = SURAH_START_PAGES[surah + 1];
-    }
-    const pagesIntoSurah = startPage - surahStartPage;
-    let curSurah = surah;
-    let curAyah = Math.min(pagesIntoSurah * AYAH_PER_PAGE + 1, ayahCounts[surah]);
-    const fromSurah = curSurah;
-    const fromAyah = curAyah;
-
-    // Walk forward for one page budget.
-    let remainingBudget = AYAH_PER_PAGE;
-    let reachedEnd = false;
-    while (remainingBudget > 0) {
-      if (curSurah === TOTAL_SURAHS && curAyah === LAST_AYAHS) {
-        reachedEnd = true;
-        break;
-      }
-      const next = getNextPosition(curSurah, curAyah);
-      if (!next) {
-        reachedEnd = true;
-        break;
-      }
-      // If we've already crossed the surah boundary into the next surah,
-      // stop — we are done with this page.
-      if (next.surah > surah && SURAH_START_PAGES[next.surah] > startPage) {
-        break;
-      }
-      curSurah = next.surah;
-      curAyah = next.ayah;
-      remainingBudget -= 1;
-    }
-    // If we walked past the page boundary (i.e. the current page is now > startPage),
-    // step back so toAyah is on startPage.
-    if (curSurah > surah || (curSurah === surah && curAyah > ayahCounts[surah])) {
-      // Crossed into next surah: end the range at the last ayah of the original surah.
-      curSurah = surah;
-      curAyah = ayahCounts[surah];
-    }
-    // If pagesIntoSurah + 1 reaches nextSurahStartPage, the page ends exactly
-    // at the surah boundary — clip to surah's last ayah.
-    if (startPage + 1 >= nextSurahStartPage && curSurah === surah) {
-      curAyah = ayahCounts[surah];
-    }
-    if (curSurah === TOTAL_SURAHS && curAyah === LAST_AYAHS) {
-      reachedEnd = true;
-    }
-
+    const cached = (typeof PageIndex !== 'undefined') ? PageIndex.getCached() : null;
+    if (!cached || !cached.pageRanges.has(startPage)) return null;
+    const r = cached.pageRanges.get(startPage);
+    const isCompleted = (r.toSurah === TOTAL_SURAHS && r.toAyah === LAST_AYAHS);
     return {
-      fromSurah,
-      fromAyah,
-      toSurah: curSurah,
-      toAyah: curAyah,
-      count: countAyahs(fromSurah, fromAyah, curSurah, curAyah),
-      isCompleted: reachedEnd,
+      fromSurah: r.fromSurah,
+      fromAyah: r.fromAyah,
+      toSurah: r.toSurah,
+      toAyah: r.toAyah,
+      count: countAyahs(r.fromSurah, r.fromAyah, r.toSurah, r.toAyah),
+      isCompleted,
     };
   }
 
