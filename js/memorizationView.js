@@ -294,6 +294,215 @@ const MemorizationView = (() => {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Plan editor modal
+  // ---------------------------------------------------------------------
+
+  function surahListOptionsHtml(selectedSurah) {
+    const ids = Object.keys(surahNameMap || {}).map(n => parseInt(n, 10)).filter(Number.isFinite).sort((a, b) => a - b);
+    if (ids.length === 0) {
+      return Array.from({ length: QuranMetaService.TOTAL_SURAHS }, (_, i) => i + 1)
+        .map(id => `<option value="${id}" ${id === selectedSurah ? 'selected' : ''}>${toArabicDigits(id)}</option>`)
+        .join('');
+    }
+    return ids.map(id => `<option value="${id}" ${id === selectedSurah ? 'selected' : ''}>${esc(surahNameMap[id])} (${toArabicDigits(id)})</option>`).join('');
+  }
+
+  function buildPlanEditorModalHtml(plan) {
+    const targetType = (plan && plan.targetType) ? plan.targetType : 'ayahs';
+    const dailyAmount = (plan && Number.isFinite(plan.dailyAmount)) ? plan.dailyAmount : 5;
+    const currentSurah = (plan && Number.isInteger(plan.currentSurah)) ? plan.currentSurah : 1;
+    const currentAyah = (plan && Number.isInteger(plan.currentAyah)) ? plan.currentAyah : 1;
+    const showStepper = targetType === 'ayahs';
+    const surahOptions = surahListOptionsHtml(currentSurah);
+    const surahMax = QuranMetaService.getSurahAyahCount(currentSurah);
+    return `
+      <div class="plan-editor-row">
+        <label class="plan-editor-label">نوع الهدف</label>
+        <div class="plan-editor-mode-segmented" role="radiogroup" aria-label="نوع الهدف">
+          <button type="button" class="plan-editor-mode-btn ${targetType === 'ayahs' ? 'active' : ''}" data-mode="ayahs" role="radio" aria-checked="${targetType === 'ayahs'}">آيات</button>
+          <button type="button" class="plan-editor-mode-btn ${targetType === 'surah' ? 'active' : ''}" data-mode="surah" role="radio" aria-checked="${targetType === 'surah'}">سورة</button>
+          <button type="button" class="plan-editor-mode-btn ${targetType === 'page' ? 'active' : ''}" data-mode="page" role="radio" aria-checked="${targetType === 'page'}">صفحة</button>
+        </div>
+      </div>
+
+      <div class="plan-editor-row" id="plan-editor-stepper-row" ${showStepper ? '' : 'hidden'}>
+        <label class="plan-editor-label" for="plan-editor-amount">عدد الآيات اليومي</label>
+        <div class="plan-editor-stepper">
+          <button type="button" class="plan-editor-stepper-btn" id="plan-editor-amount-dec" aria-label="إنقاص">−</button>
+          <input type="number" min="1" value="${esc(String(dailyAmount))}" id="plan-editor-amount" class="plan-editor-stepper-input" inputmode="numeric">
+          <button type="button" class="plan-editor-stepper-btn" id="plan-editor-amount-inc" aria-label="زيادة">+</button>
+        </div>
+      </div>
+
+      <div class="plan-editor-row">
+        <label class="plan-editor-label" for="plan-editor-surah">السورة</label>
+        <select id="plan-editor-surah" class="plan-editor-select">
+          ${surahOptions}
+        </select>
+      </div>
+
+      <div class="plan-editor-row">
+        <label class="plan-editor-label" for="plan-editor-ayah">الآية</label>
+        <div class="plan-editor-ayah-row">
+          <input type="number" min="1" max="${esc(String(surahMax))}" value="${esc(String(currentAyah))}" id="plan-editor-ayah" class="plan-editor-ayah-input" inputmode="numeric">
+          <span class="plan-editor-ayah-max" id="plan-editor-ayah-max">${toArabicDigits(surahMax)}</span>
+        </div>
+      </div>
+
+      <div class="plan-editor-actions">
+        <button type="button" class="memorization-btn memorization-btn-ghost" id="plan-editor-cancel">إلغاء</button>
+        <button type="button" class="memorization-btn memorization-btn-primary" id="plan-editor-save">حفظ التغييرات</button>
+      </div>
+    `;
+  }
+
+  let planEditorDialog = null;
+
+  function ensurePlanEditorDialog() {
+    if (planEditorDialog) return planEditorDialog;
+    planEditorDialog = document.createElement('dialog');
+    planEditorDialog.className = 'plan-editor-modal';
+    planEditorDialog.id = 'plan-editor-modal';
+    planEditorDialog.setAttribute('aria-labelledby', 'plan-editor-title');
+    const heading = document.createElement('h3');
+    heading.id = 'plan-editor-title';
+    heading.className = 'plan-editor-title';
+    heading.textContent = 'خطة الحفظ';
+    planEditorDialog.appendChild(heading);
+    const body = document.createElement('div');
+    body.id = 'plan-editor-body';
+    planEditorDialog.appendChild(body);
+    document.body.appendChild(planEditorDialog);
+    planEditorDialog.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      closePlanEditor();
+    });
+    return planEditorDialog;
+  }
+
+  function openPlanEditor() {
+    ensureSurahNameMap();
+    const dialog = ensurePlanEditorDialog();
+    const body = dialog.querySelector('#plan-editor-body');
+    body.innerHTML = buildPlanEditorModalHtml(state ? state.plan : null);
+    wirePlanEditor();
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute('open', '');
+    }
+  }
+
+  function closePlanEditor() {
+    if (planEditorDialog && planEditorDialog.open) {
+      planEditorDialog.close();
+    }
+  }
+
+  function wirePlanEditor() {
+    const dialog = planEditorDialog;
+    if (!dialog) return;
+
+    dialog.querySelectorAll('.plan-editor-mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        dialog.querySelectorAll('.plan-editor-mode-btn').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-checked', 'false');
+        });
+        btn.classList.add('active');
+        btn.setAttribute('aria-checked', 'true');
+        const stepperRow = dialog.querySelector('#plan-editor-stepper-row');
+        if (stepperRow) {
+          if (mode === 'ayahs') stepperRow.removeAttribute('hidden');
+          else stepperRow.setAttribute('hidden', '');
+        }
+      });
+    });
+
+    const dec = dialog.querySelector('#plan-editor-amount-dec');
+    const inc = dialog.querySelector('#plan-editor-amount-inc');
+    const amountInput = dialog.querySelector('#plan-editor-amount');
+    function readAmount() {
+      if (!amountInput) return 5;
+      const raw = parseInt(amountInput.value, 10);
+      return Number.isFinite(raw) && raw > 0 ? raw : 5;
+    }
+    function writeAmount(n) {
+      if (!amountInput) return;
+      amountInput.value = String(n);
+      if (dec) dec.disabled = n <= 1;
+    }
+    dec?.addEventListener('click', () => writeAmount(Math.max(1, readAmount() - 1)));
+    inc?.addEventListener('click', () => writeAmount(readAmount() + 1));
+    writeAmount(readAmount());
+
+    const surahSelect = dialog.querySelector('#plan-editor-surah');
+    const ayahInput = dialog.querySelector('#plan-editor-ayah');
+    const ayahMaxSpan = dialog.querySelector('#plan-editor-ayah-max');
+    surahSelect?.addEventListener('change', () => {
+      const id = parseInt(surahSelect.value, 10);
+      const max = QuranMetaService.getSurahAyahCount(id);
+      if (ayahInput) {
+        ayahInput.setAttribute('max', String(max));
+        const current = parseInt(ayahInput.value, 10);
+        if (!Number.isFinite(current) || current < 1 || current > max) {
+          ayahInput.value = '1';
+        }
+      }
+      if (ayahMaxSpan) ayahMaxSpan.textContent = toArabicDigits(max);
+    });
+
+    dialog.querySelector('#plan-editor-cancel')?.addEventListener('click', closePlanEditor);
+
+    dialog.querySelector('#plan-editor-save')?.addEventListener('click', onSavePlanEditor);
+  }
+
+  async function onSavePlanEditor() {
+    const dialog = planEditorDialog;
+    if (!dialog || !state) return;
+
+    const modeBtn = dialog.querySelector('.plan-editor-mode-btn.active');
+    const targetType = modeBtn ? modeBtn.dataset.mode : 'ayahs';
+    const amountInput = dialog.querySelector('#plan-editor-amount');
+    const dailyAmount = amountInput ? Math.max(1, parseInt(amountInput.value, 10) || 5) : 5;
+    const surahSelect = dialog.querySelector('#plan-editor-surah');
+    const ayahInput = dialog.querySelector('#plan-editor-ayah');
+    const currentSurah = surahSelect ? parseInt(surahSelect.value, 10) : 1;
+    const currentAyah = ayahInput ? parseInt(ayahInput.value, 10) : 1;
+
+    if (!QuranMetaService.validatePosition(currentSurah, currentAyah)) {
+      showTransientToast('موقع غير صالح. تحقق من السورة والآية.', true);
+      return;
+    }
+
+    try {
+      if (state.plan.isActive) {
+        MemorizationEngine.updatePlanPointer(state, {
+          currentSurah,
+          currentAyah,
+          targetType,
+          dailyAmount,
+        });
+      } else {
+        MemorizationEngine.activatePlan(state, {
+          targetType,
+          dailyAmount,
+          currentSurah,
+          currentAyah,
+        });
+        MemorizationEngine.ensureCurrentDay(state);
+      }
+      await persist('تم تحديث خطة الحفظ.', 'تعذر حفظ الخطة. حاول مجدداً.');
+      closePlanEditor();
+      render();
+    } catch (e) {
+      console.error('MemorizationView: save plan failed', e);
+      showTransientToast((e && e.message) || 'تعذر حفظ الخطة.', true);
+    }
+  }
+
   function renderHeader() {
     return `
       <div class="memorization-header">
@@ -314,22 +523,11 @@ const MemorizationView = (() => {
             <span>ابدأ خطة حفظ جديدة</span>
           </div>
           <p class="memorization-card-sub">
-            اختر عدد الآيات التي تحفظها يومياً، وسيقوم النظام بتحديد نطاق اليوم تلقائياً.
+            اختر طريقة الحفظ ونقطة البداية، وسيقوم النظام بتحديد نطاق اليوم تلقائياً.
           </p>
-          <div class="memorization-plan-amount">
-            <label for="mem-plan-amount" class="memorization-field-label">عدد آيات الحفظ اليومي</label>
-            <div class="memorization-amount-options" role="radiogroup" aria-label="عدد آيات الحفظ اليومي">
-              ${[3, 5, 10].map(n => `
-                <button type="button" class="memorization-amount-option" data-amount="${n}" role="radio" aria-checked="false">
-                  ${toArabicDigits(n)} آيات
-                </button>
-              `).join('')}
-            </div>
-            <input type="hidden" id="mem-plan-amount" value="5">
-          </div>
           <button type="button" id="mem-start-plan" class="memorization-btn memorization-btn-primary">
-            <i class="fa-solid fa-play"></i>
-            <span>ابدأ الآن</span>
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>اختر خطة الحفظ</span>
           </button>
         </section>
       `;
@@ -369,10 +567,16 @@ const MemorizationView = (() => {
             <span class="memorization-info-value">سورة ${formatSurahName(plan.currentSurah)} — الآية ${toArabicDigits(plan.currentAyah)}</span>
           </div>
         </div>
-        <button type="button" id="mem-stop-plan" class="memorization-btn memorization-btn-ghost">
-          <i class="fa-solid fa-pause"></i>
-          <span>إيقاف الخطة</span>
-        </button>
+        <div class="memorization-plan-buttons">
+          <button type="button" id="mem-edit-plan" class="memorization-btn memorization-btn-ghost">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>تعديل الخطة</span>
+          </button>
+          <button type="button" id="mem-stop-plan" class="memorization-btn memorization-btn-ghost">
+            <i class="fa-solid fa-pause"></i>
+            <span>إيقاف الخطة</span>
+          </button>
+        </div>
       </section>
     `;
   }
@@ -642,30 +846,11 @@ const MemorizationView = (() => {
   // ---------------------------------------------------------------------
 
   function wireActions(summary) {
-    // Amount picker on the empty-state plan card
-    const amountOptions = document.querySelectorAll('.memorization-amount-option');
-    const amountInput = document.getElementById('mem-plan-amount');
-    amountOptions.forEach(btn => {
-      btn.addEventListener('click', () => {
-        amountOptions.forEach(b => {
-          b.classList.remove('active');
-          b.setAttribute('aria-checked', 'false');
-        });
-        btn.classList.add('active');
-        btn.setAttribute('aria-checked', 'true');
-        if (amountInput) amountInput.value = btn.dataset.amount || '5';
-      });
-    });
-    // Default to 5
-    if (amountInput && !amountInput.value) amountInput.value = '5';
-    const defaultOption = document.querySelector('.memorization-amount-option[data-amount="5"]');
-    if (defaultOption) {
-      defaultOption.classList.add('active');
-      defaultOption.setAttribute('aria-checked', 'true');
-    }
-
     const startBtn = document.getElementById('mem-start-plan');
     startBtn?.addEventListener('click', onStartPlan);
+
+    const editBtn = document.getElementById('mem-edit-plan');
+    editBtn?.addEventListener('click', openPlanEditor);
 
     const stopBtn = document.getElementById('mem-stop-plan');
     stopBtn?.addEventListener('click', onStopPlan);
@@ -698,20 +883,7 @@ const MemorizationView = (() => {
   }
 
   async function onStartPlan() {
-    const amountInput = document.getElementById('mem-plan-amount');
-    const raw = amountInput ? parseInt(amountInput.value, 10) : 5;
-    const amount = Number.isFinite(raw) && raw > 0 ? raw : 5;
-    MemorizationEngine.activatePlan(state, amount);
-    MemorizationEngine.ensureCurrentDay(state);
-    try {
-      await adapter.saveState(state);
-      emitCrossTabUpdate();
-      showTransientToast('تم بدء خطة الحفظ. بارك الله فيك!');
-      render();
-    } catch (e) {
-      console.error('MemorizationView: failed to start plan', e);
-      showTransientToast('تعذر حفظ الخطة. حاول مجدداً.', true);
-    }
+    openPlanEditor();
   }
 
   async function onStopPlan() {
@@ -978,6 +1150,8 @@ const MemorizationView = (() => {
     init,
     render,
     destroy,
+    openPlanEditor,
+    closePlanEditor,
     DAILY_REVIEW_LIMIT,
     UNDO_WINDOW_MS,
   };

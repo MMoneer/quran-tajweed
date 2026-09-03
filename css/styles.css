@@ -4003,3 +4003,144 @@ body.light-theme .memorization-backlog-alert {
     justify-content: center;
   }
 }
+
+/* Plan editor modal */
+.plan-editor-modal {
+  border: none;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  max-width: 420px;
+  width: 92vw;
+  background: var(--bg-card, #ffffff);
+  color: var(--text-primary, #222222);
+  direction: rtl;
+}
+.plan-editor-modal::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+.plan-editor-title {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.plan-editor-row {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.plan-editor-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.plan-editor-mode-segmented {
+  display: flex;
+  gap: 0.4rem;
+}
+.plan-editor-mode-btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 8px;
+  background: var(--bg-input, #f7f7f7);
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+.plan-editor-mode-btn.active {
+  background: var(--accent, #2563eb);
+  color: #fff;
+  border-color: var(--accent, #2563eb);
+}
+.plan-editor-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.plan-editor-stepper-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #d0d0d0);
+  background: var(--bg-input, #f7f7f7);
+  font-size: 1.3rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.plan-editor-stepper-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.plan-editor-stepper-input {
+  width: 5rem;
+  text-align: center;
+  font-size: 1.1rem;
+  padding: 0.4rem;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 8px;
+  background: var(--bg-input, #ffffff);
+  color: inherit;
+  font-family: inherit;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.plan-editor-stepper-input::-webkit-outer-spin-button,
+.plan-editor-stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.plan-editor-select,
+.plan-editor-ayah-input {
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 8px;
+  background: var(--bg-input, #ffffff);
+  color: inherit;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.plan-editor-ayah-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.plan-editor-ayah-row .plan-editor-ayah-input {
+  flex: 0 0 6rem;
+}
+.plan-editor-ayah-max {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+.plan-editor-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+[dir="rtl"] .plan-editor-actions {
+  justify-content: flex-start;
+}
+.memorization-plan-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .plan-editor-modal {
+    background: #1f2937;
+    color: #f3f4f6;
+  }
+  .plan-editor-mode-btn,
+  .plan-editor-stepper-btn,
+  .plan-editor-stepper-input,
+  .plan-editor-select,
+  .plan-editor-ayah-input {
+    background: #374151;
+    color: #f3f4f6;
+    border-color: #4b5563;
+  }
+}
