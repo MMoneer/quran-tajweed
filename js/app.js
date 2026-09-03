@@ -70,7 +70,7 @@ const App = (() => {
   /**
    * Continue with normal app initialization
    */
-  function continueInit() {
+  async function continueInit() {
     // 1. Initialize settings & customization values
     SettingsManager.init();
 
@@ -80,10 +80,12 @@ const App = (() => {
     // 3. Initialize Surah List Index
     SurahIndex.init();
 
-    // 3b. Initialize Memorization view (loads persisted state, warms caches)
+    // 3b. Initialize Memorization view (loads persisted state from IndexedDB,
+    //     warms caches). MUST be awaited before setupRouter() so the initial
+    //     route handler can call MemorizationView.render() with state loaded.
     if (typeof MemorizationView !== 'undefined') {
       try {
-        MemorizationView.init();
+        await MemorizationView.init();
       } catch (e) {
         console.error('MemorizationView.init failed:', e);
       }

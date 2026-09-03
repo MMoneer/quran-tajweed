@@ -49,6 +49,7 @@ const MemorizationView = (() => {
   let undoTimerHandle = null;
   let undoCountdownHandle = null;
   let lastRenderedSignature = null;
+  let initPromise = null;
 
   /**
    * Best-effort: convert a Latin number to Arabic-Indic digits using
@@ -198,38 +199,44 @@ const MemorizationView = (() => {
   // ---------------------------------------------------------------------
 
   async function init() {
-    adapter = new IndexedDbAdapter();
-    try {
-      const loaded = await adapter.loadState();
-      if (loaded && typeof loaded === 'object' && loaded.version === MemorizationEngine.SCHEMA_VERSION) {
-        state = loaded;
-      } else {
+    // Idempotent guard — if init() is called twice (e.g. on hot-reload or by
+    // a caller that didn't await the first call), return the same promise.
+    if (initPromise) return initPromise;
+    initPromise = (async () => {
+      adapter = new IndexedDbAdapter();
+      try {
+        const loaded = await adapter.loadState();
+        if (loaded && typeof loaded === 'object' && loaded.version === MemorizationEngine.SCHEMA_VERSION) {
+          state = loaded;
+        } else {
+          state = MemorizationEngine.createInitialState();
+        }
+      } catch (e) {
+        console.error('MemorizationView: loadState failed; using fresh state', e);
         state = MemorizationEngine.createInitialState();
       }
-    } catch (e) {
-      console.error('MemorizationView: loadState failed; using fresh state', e);
-      state = MemorizationEngine.createInitialState();
-    }
 
-    // Roll day forward if the stored day is stale.
-    MemorizationEngine.ensureCurrentDay(state);
+      // Roll day forward if the stored day is stale.
+      MemorizationEngine.ensureCurrentDay(state);
 
-    // Best-effort: warm the surah name cache for richer labels.
-    await ensureSurahNameMap();
+      // Best-effort: warm the surah name cache for richer labels.
+      await ensureSurahNameMap();
 
-    // Cross-tab sync: when another tab updates state, re-render.
-    window.addEventListener('storage', (event) => {
-      if (!event || !event.key) return;
-      if (event.key === 'quran_memorization_update') {
-        // Reload on the next tick so we don't race with the writer tab.
+      // Cross-tab sync: when another tab updates state, re-render.
+      window.addEventListener('storage', (event) => {
+        if (!event || !event.key) return;
+        if (event.key === 'quran_memorization_update') {
+          // Reload on the next tick so we don't race with the writer tab.
+          reloadFromStorage();
+        }
+      });
+
+      // In-tab cross-instance sync (e.g. two MemorizationView instances).
+      window.addEventListener('quran_memorization_state_changed', () => {
         reloadFromStorage();
-      }
-    });
-
-    // In-tab cross-instance sync (e.g. two MemorizationView instances).
-    window.addEventListener('quran_memorization_state_changed', () => {
-      reloadFromStorage();
-    });
+      });
+    })();
+    return initPromise;
   }
 
   async function reloadFromStorage() {
@@ -266,6 +273,17 @@ const MemorizationView = (() => {
   }
 
   function render() {
+    // Defense in depth: if init() hasn't completed yet, await it before
+    // rendering. This protects callers (e.g. cross-tab storage events) that
+    // arrive before the initial state load finishes.
+    if (!state && initPromise) {
+      initPromise.then(() => {
+        if (state) render();
+      }).catch((e) => {
+        console.error('MemorizationView.render: init failed', e);
+      });
+      return;
+    }
     if (!state) return;
     MemorizationEngine.ensureCurrentDay(state);
 
