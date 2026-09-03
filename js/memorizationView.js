@@ -112,6 +112,21 @@ const MemorizationView = (() => {
     return `${formatSurahName(fromSurah)} ${toArabicDigits(fromAyah)} ← ${formatSurahName(toSurah)} ${toArabicDigits(toAyah)}`;
   }
 
+  /**
+   * Pretty Arabic label for the daily memorization target, respecting
+   * `targetType`:
+   *   'ayahs' → "{N} آيات / يوم"
+   *   'surah' → "سورة كاملة / يوم"
+   *   'page'  → "صفحة كاملة / يوم"
+   */
+  function formatPlanDailyTarget(plan) {
+    const amount = (plan && Number.isFinite(plan.dailyAmount)) ? plan.dailyAmount : 5;
+    const type = (plan && plan.targetType) ? plan.targetType : 'ayahs';
+    if (type === 'surah') return 'سورة كاملة / يوم';
+    if (type === 'page') return 'صفحة كاملة / يوم';
+    return `${toArabicDigits(amount)} آيات / يوم`;
+  }
+
   function statusLabel(status) {
     return STATUS_LABEL_AR[status] || status;
   }
@@ -560,7 +575,7 @@ const MemorizationView = (() => {
         <div class="memorization-plan-info">
           <div class="memorization-plan-info-row">
             <span class="memorization-info-label">الهدف اليومي</span>
-            <span class="memorization-info-value">${toArabicDigits(plan.dailyAmount)} آيات / يوم</span>
+            <span class="memorization-info-value">${formatPlanDailyTarget(plan)}</span>
           </div>
           <div class="memorization-plan-info-row">
             <span class="memorization-info-label">الموقع الحالي</span>
