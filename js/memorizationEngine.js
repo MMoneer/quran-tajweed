@@ -255,9 +255,20 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     }
 
     const plan = state.plan;
-    const range = QuranMetaService.calculateNextAyahRange(
-      plan.currentSurah, plan.currentAyah, plan.dailyAmount
-    );
+    let range;
+    if (plan.targetType === 'surah') {
+      range = QuranMetaService.calculateNextSurahRange(plan.currentSurah, plan.currentAyah);
+    } else if (plan.targetType === 'page') {
+      const page = QuranMetaService.getPageOf(plan.currentSurah, plan.currentAyah);
+      if (page == null) {
+        return null;
+      }
+      range = QuranMetaService.calculateNextPageRange(page);
+    } else {
+      range = QuranMetaService.calculateNextAyahRange(
+        plan.currentSurah, plan.currentAyah, plan.dailyAmount
+      );
+    }
     if (!range || range.count === 0) {
       return null;
     }
