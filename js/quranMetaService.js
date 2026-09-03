@@ -32,6 +32,7 @@ const QuranMetaService = (() => {
 
   const TOTAL_SURAHS = 114;
   const LAST_AYAHS = 6; // Last surah (An-Nas) has 6 ayahs.
+  const TOTAL_PAGES = 604; // Standard mushaf page count.
 
   function isValidSurah(surah) {
     return Number.isInteger(surah) && surah >= 1 && surah <= TOTAL_SURAHS;
@@ -48,6 +49,34 @@ const QuranMetaService = (() => {
    */
   function getSurahAyahCount(surah) {
     return isValidSurah(surah) ? ayahCounts[surah] : 0;
+  }
+
+  /**
+   * Return the 1-based mushaf page (1..604) containing the given ayah.
+   * Uses SURAH_START_PAGES (loaded from data/juz-data.js) and the
+   * standard ~15-ayahs-per-page approximation. v1: returns the page
+   * that contains (surah, ayah) given the surah's start page and a
+   * walk forward until the next surah starts.
+   * @returns {number|null}
+   */
+  function getPageOf(surah, ayah) {
+    if (!isValidAyah(surah, ayah)) return null;
+    if (typeof SURAH_START_PAGES === 'undefined' || !Array.isArray(SURAH_START_PAGES)) {
+      return null;
+    }
+    const startPage = SURAH_START_PAGES[surah];
+    let nextSurahStartPage = TOTAL_PAGES + 1;
+    if (surah < TOTAL_SURAHS) {
+      for (let i = surah + 1; i <= TOTAL_SURAHS; i++) {
+        if (SURAH_START_PAGES[i] > startPage) {
+          nextSurahStartPage = SURAH_START_PAGES[i];
+          break;
+        }
+      }
+    }
+    const ayahsFromSurahStart = ayah - 1;
+    const offset = Math.floor(ayahsFromSurahStart / 15);
+    return Math.min(startPage + offset, nextSurahStartPage - 1);
   }
 
   /**
@@ -162,10 +191,12 @@ const QuranMetaService = (() => {
   return {
     TOTAL_SURAHS,
     LAST_AYAHS,
+    TOTAL_PAGES,
     getSurahAyahCount,
     validatePosition,
     getNextPosition,
     calculateNextAyahRange,
+    getPageOf,
   };
 })();
 
