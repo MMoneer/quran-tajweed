@@ -26,6 +26,10 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
     'learning', 'reviewing', 'consolidating', 'stable', 'mastered',
   ]);
 
+  // Mirror the engine's plan.targetType enum. Adding a new mode here must
+  // also be added in MemorizationEngine.VALID_TARGET_TYPES.
+  const VALID_TARGET_TYPES = new Set(['ayahs', 'surah', 'page']);
+
   // Mirror the engine's badge ids. Any unknown badge string is rejected
   // so users cannot smuggle arbitrary data into a backup file.
   const VALID_BADGES = new Set([
@@ -126,7 +130,9 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
     if (!isPlainObject(parsed.plan)) return fail('BackupValidator: plan must be an object');
     const plan = parsed.plan;
     if (typeof plan.isActive !== 'boolean') return fail('BackupValidator: plan.isActive must be boolean');
-    if (plan.targetType !== 'ayahs') return fail('BackupValidator: plan.targetType must be "ayahs"');
+    if (!VALID_TARGET_TYPES.has(plan.targetType)) {
+      return fail(`BackupValidator: plan.targetType must be one of ${[...VALID_TARGET_TYPES].join(', ')}`);
+    }
     if (!isPositiveInteger(plan.dailyAmount)) return fail('BackupValidator: plan.dailyAmount must be integer >= 1');
     if (typeof plan.isCompleted !== 'boolean') return fail('BackupValidator: plan.isCompleted must be boolean');
     if (!validateQuranPosition(plan.currentSurah, plan.currentAyah)) {
@@ -212,7 +218,7 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
       version: SCHEMA_VERSION,
       plan: {
         isActive: plan.isActive,
-        targetType: 'ayahs',
+        targetType: plan.targetType,
         dailyAmount: plan.dailyAmount,
         currentSurah: plan.currentSurah,
         currentAyah: plan.currentAyah,
@@ -261,7 +267,7 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
     const srcPlan = isPlainObject(src.plan) ? src.plan : {};
     const plan = {
       isActive: typeof srcPlan.isActive === 'boolean' ? srcPlan.isActive : false,
-      targetType: 'ayahs',
+      targetType: VALID_TARGET_TYPES.has(srcPlan.targetType) ? srcPlan.targetType : 'ayahs',
       dailyAmount: isPositiveInteger(srcPlan.dailyAmount) ? srcPlan.dailyAmount : 5,
       currentSurah: Number.isInteger(srcPlan.currentSurah) ? srcPlan.currentSurah : 1,
       currentAyah: Number.isInteger(srcPlan.currentAyah) ? srcPlan.currentAyah : 1,
