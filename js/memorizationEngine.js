@@ -130,6 +130,27 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
   }
 
   /**
+   * Build the next memorization range according to `plan.targetType`.
+   * Returns null if the plan's current pointer has no valid range.
+   * Used by both `completeNewMemorization` (which commits the item) and
+   * `getDailyTaskSummary` (which only displays the range).
+   */
+  function computeNextPlanRange(plan) {
+    if (!plan || typeof plan !== 'object') return null;
+    if (plan.targetType === 'surah') {
+      return QuranMetaService.calculateNextSurahRange(plan.currentSurah, plan.currentAyah);
+    }
+    if (plan.targetType === 'page') {
+      const page = QuranMetaService.getPageOf(plan.currentSurah, plan.currentAyah);
+      if (page == null) return null;
+      return QuranMetaService.calculateNextPageRange(page);
+    }
+    return QuranMetaService.calculateNextAyahRange(
+      plan.currentSurah, plan.currentAyah, plan.dailyAmount
+    );
+  }
+
+  /**
    * Snapshot a deep-ish copy of the mutable parts of state so the most
    * recent review (or new-memorization commit) can be undone.
    *
@@ -255,20 +276,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     }
 
     const plan = state.plan;
-    let range;
-    if (plan.targetType === 'surah') {
-      range = QuranMetaService.calculateNextSurahRange(plan.currentSurah, plan.currentAyah);
-    } else if (plan.targetType === 'page') {
-      const page = QuranMetaService.getPageOf(plan.currentSurah, plan.currentAyah);
-      if (page == null) {
-        return null;
-      }
-      range = QuranMetaService.calculateNextPageRange(page);
-    } else {
-      range = QuranMetaService.calculateNextAyahRange(
-        plan.currentSurah, plan.currentAyah, plan.dailyAmount
-      );
-    }
+    const range = computeNextPlanRange(plan);
     if (!range || range.count === 0) {
       return null;
     }
@@ -457,9 +465,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     const dueIds = overdue.slice(0, Math.max(0, dailyReviewLimit)).map(it => it.id);
     const remainingIds = overdue.slice(dailyReviewLimit).map(it => it.id);
     const newMemorization = (state.plan.isActive && !state.plan.isCompleted)
-      ? QuranMetaService.calculateNextAyahRange(
-          state.plan.currentSurah, state.plan.currentAyah, state.plan.dailyAmount
-        )
+      ? computeNextPlanRange(state.plan)
       : null;
 
     const dueReviews = state.items.filter(it => dueIds.includes(it.id));
