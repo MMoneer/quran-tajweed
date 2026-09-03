@@ -560,14 +560,13 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     const requestedAyah = (Number.isInteger(opts.currentAyah) && opts.currentAyah >= 1) ? opts.currentAyah : 1;
     const surahMax = QuranMetaService.getSurahAyahCount(currentSurah);
     const currentAyah = Math.min(requestedAyah, surahMax);
-    const prevPlan = state.plan ? { ...state.plan } : null;
     state.plan.isActive = true;
     state.plan.targetType = targetType;
     state.plan.dailyAmount = dailyAmount;
     state.plan.currentSurah = currentSurah;
     state.plan.currentAyah = currentAyah;
     state.plan.isCompleted = false;
-    if (prevPlan) resetDayCompletionIfRangeChanged(state, prevPlan);
+    resetDayCompletionOnPlanEdit(state);
     return state;
   }
 
@@ -577,34 +576,23 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
   }
 
   /**
-   * Reset the per-day "new memorization completed" flag if the supplied
-   * plan fields actually change what today's memorization range would be.
-   * Returns true iff the flag was reset.
+   * Reset the per-day "new memorization completed" flag when the user
+   * explicitly edits the plan. Returns true iff the flag was reset.
    *
    * Items, badges, stats, and review-schedule state are NEVER touched
-   * by plan edits — only the per-day done-flag is, because the previous
-   * "done" applied to a now-stale range.
+   * by plan edits — only the per-day done-flag is, because the user is
+   * expressing a new intent for today.
+   *
+   * The flag is reset whenever `updatePlanPointer` (or `activatePlan`)
+   * is called, regardless of whether the resulting range happens to
+   * coincide with the previously committed range. A user who edits the
+   * plan is asking for a fresh start today; if the new range matches
+   * an old one, they can simply click "تم الحفظ" again to recommit.
    */
-  function resetDayCompletionIfRangeChanged(state, prevPlan) {
+  function resetDayCompletionOnPlanEdit(state) {
     if (!state || !state.day) return false;
     if (!state.day.newMemorizationCompleted) return false;
-    const newRange = computeNextPlanRange(state.plan);
-    if (!newRange || newRange.count === 0) return false;
-    // Build the previous range the same way, using the *old* plan snapshot.
-    const prevRange = computeNextPlanRange(prevPlan);
-    if (prevRange
-        && prevRange.fromSurah === newRange.fromSurah
-        && prevRange.fromAyah === newRange.fromAyah
-        && prevRange.toSurah === newRange.toSurah
-        && prevRange.toAyah === newRange.toAyah) {
-      return false;
-    }
     state.day.newMemorizationCompleted = false;
-    // Also remove any review completion that pointed at the old range's
-    // item id, since the item itself may not exist after the plan move.
-    // (Safer: leave completedReviewIds alone; the engine's review logic
-    // is keyed by item.id and an item that no longer exists simply
-    // produces no review candidates.)
     return true;
   }
 
@@ -623,8 +611,6 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       state.plan = { isActive: false, targetType: 'ayahs', dailyAmount: 5, currentSurah: 1, currentAyah: 1, isCompleted: false };
     }
     const plan = state.plan;
-    // Snapshot the plan BEFORE mutation so we can detect a range change.
-    const prevPlan = { ...plan };
 
     if (partial.targetType !== undefined) {
       if (!VALID_TARGET_TYPES.has(partial.targetType)) {
@@ -660,9 +646,9 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       plan.isCompleted = true;
     }
 
-    // If the new plan points at a different range than before, the previous
-    // day's "completed" flag was for a stale range — reset it.
-    resetDayCompletionIfRangeChanged(state, prevPlan);
+    // The user explicitly edited the plan. Reset today's "new memorization
+    // completed" flag so the new range is the actionable one for today.
+    resetDayCompletionOnPlanEdit(state);
 
     return state;
   }
