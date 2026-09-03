@@ -284,9 +284,16 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     const id = buildItemId(range.fromSurah, range.fromAyah, range.toSurah, range.toAyah);
     const existing = findItem(state, id);
     if (existing) {
-      // Idempotent guard hit through deduping an existing range (e.g. user
-      // resets back to a position that already produced an item). Mark
-      // today's flag, do NOT advance the pointer.
+      // Dedup guard: this range was already recorded (e.g. from a prior
+      // session or plan position). The item is NOT re-created, but the
+      // pointer MUST still advance — the user explicitly clicked "تم الحفظ".
+      const next = QuranMetaService.getNextPosition(range.toSurah, range.toAyah);
+      if (next) {
+        plan.currentSurah = next.surah;
+        plan.currentAyah = next.ayah;
+      } else {
+        plan.isCompleted = true;
+      }
       state.day.newMemorizationCompleted = true;
       if (isDayCompleted(state)) {
         tryAdvanceStreak(state);

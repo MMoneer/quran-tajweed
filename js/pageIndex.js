@@ -79,7 +79,7 @@ const PageIndex = (() => {
           while (j < pagePerAyah.length && pagePerAyah[j] === page) {
             j++;
           }
-          const toAyah = j; // exclusive upper bound → last ayah in this run
+          const toAyah = j; // last ayah on this page (1-indexed, inclusive)
           const existing = pageRanges.get(page);
           if (!existing) {
             pageRanges.set(page, {
