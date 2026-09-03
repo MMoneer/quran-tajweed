@@ -532,18 +532,81 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
 
   // -------- activation helpers (not strictly part of the engine core) --------
 
-  function activatePlan(state, dailyAmount = 5) {
+  function activatePlan(state, opts = {}) {
+    const dailyAmount = Math.max(1, Math.trunc(Number(opts.dailyAmount) || 5));
+    const targetType = (opts.targetType === 'surah' || opts.targetType === 'page')
+      ? opts.targetType
+      : 'ayahs';
+    const currentSurah = (Number.isInteger(opts.currentSurah) && opts.currentSurah >= 1 && opts.currentSurah <= QuranMetaService.TOTAL_SURAHS)
+      ? opts.currentSurah
+      : 1;
+    const requestedAyah = (Number.isInteger(opts.currentAyah) && opts.currentAyah >= 1) ? opts.currentAyah : 1;
+    const surahMax = QuranMetaService.getSurahAyahCount(currentSurah);
+    const currentAyah = Math.min(requestedAyah, surahMax);
     state.plan.isActive = true;
-    state.plan.targetType = 'ayahs';
+    state.plan.targetType = targetType;
     state.plan.dailyAmount = dailyAmount;
-    state.plan.currentSurah = 1;
-    state.plan.currentAyah = 1;
+    state.plan.currentSurah = currentSurah;
+    state.plan.currentAyah = currentAyah;
     state.plan.isCompleted = false;
     return state;
   }
 
   function deactivatePlan(state) {
     state.plan.isActive = false;
+    return state;
+  }
+
+  const VALID_TARGET_TYPES = new Set(['ayahs', 'surah', 'page']);
+
+  /**
+   * Mutate only the supplied fields of `state.plan`. Preserves items,
+   * badges, stats, and day state. Throws RangeError on invalid input.
+   * @returns {object} state
+   */
+  function updatePlanPointer(state, partial = {}) {
+    if (!state || typeof state !== 'object') {
+      throw new Error('MemorizationEngine.updatePlanPointer: state is required');
+    }
+    if (!state.plan || typeof state.plan !== 'object') {
+      state.plan = { isActive: false, targetType: 'ayahs', dailyAmount: 5, currentSurah: 1, currentAyah: 1, isCompleted: false };
+    }
+    const plan = state.plan;
+
+    if (partial.targetType !== undefined) {
+      if (!VALID_TARGET_TYPES.has(partial.targetType)) {
+        throw new RangeError(`MemorizationEngine.updatePlanPointer: invalid targetType "${partial.targetType}"`);
+      }
+      plan.targetType = partial.targetType;
+    }
+
+    if (partial.dailyAmount !== undefined) {
+      const n = Math.trunc(Number(partial.dailyAmount));
+      if (!Number.isFinite(n) || n < 1) {
+        throw new RangeError(`MemorizationEngine.updatePlanPointer: invalid dailyAmount "${partial.dailyAmount}"`);
+      }
+      plan.dailyAmount = n;
+    }
+
+    if (partial.currentSurah !== undefined) {
+      if (!QuranMetaService.validatePosition(partial.currentSurah, 1)) {
+        throw new RangeError(`MemorizationEngine.updatePlanPointer: invalid currentSurah "${partial.currentSurah}"`);
+      }
+      plan.currentSurah = partial.currentSurah;
+    }
+
+    if (partial.currentAyah !== undefined) {
+      if (!QuranMetaService.validatePosition(plan.currentSurah, partial.currentAyah)) {
+        throw new RangeError(`MemorizationEngine.updatePlanPointer: invalid currentAyah "${partial.currentAyah}" for surah ${plan.currentSurah}`);
+      }
+      plan.currentAyah = partial.currentAyah;
+    }
+
+    if (plan.currentSurah === QuranMetaService.TOTAL_SURAHS
+        && plan.currentAyah === QuranMetaService.LAST_AYAHS) {
+      plan.isCompleted = true;
+    }
+
     return state;
   }
 
@@ -567,6 +630,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     computeTotalMemorizedAyahs,
     computeStatusCounts,
     activatePlan,
+    updatePlanPointer,
     deactivatePlan,
     buildItemId,
   };
