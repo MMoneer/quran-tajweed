@@ -188,6 +188,31 @@ const QuranMetaService = (() => {
     };
   }
 
+  /**
+   * Build a memorization range covering the remainder of the current
+   * surah, starting at (startSurah, startAyah). Sets isCompleted iff the
+   * range reaches 114:6.
+   * @returns {{fromSurah:number, fromAyah:number, toSurah:number, toAyah:number, count:number, isCompleted:boolean}|null}
+   */
+  function calculateNextSurahRange(startSurah, startAyah) {
+    if (!isValidAyah(startSurah, startAyah)) return null;
+    const total = ayahCounts[startSurah];
+    const fromSurah = startSurah;
+    const fromAyah = startAyah;
+    const toSurah = startSurah;
+    const toAyah = total;
+    const count = total - startAyah + 1;
+    const isCompleted = (startSurah === TOTAL_SURAHS && startAyah === total);
+    return {
+      fromSurah,
+      fromAyah,
+      toSurah,
+      toAyah,
+      count,
+      isCompleted,
+    };
+  }
+
   return {
     TOTAL_SURAHS,
     LAST_AYAHS,
@@ -196,6 +221,7 @@ const QuranMetaService = (() => {
     validatePosition,
     getNextPosition,
     calculateNextAyahRange,
+    calculateNextSurahRange,
     getPageOf,
   };
 })();
