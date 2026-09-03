@@ -152,6 +152,9 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
     for (const id of day.completedReviewIds) {
       if (typeof id !== 'string') return fail('BackupValidator: day.completedReviewIds entries must be strings');
     }
+    if (day.todayRange !== undefined && day.todayRange !== null && !isPlainObject(day.todayRange)) {
+      return fail('BackupValidator: day.todayRange must be an object or null');
+    }
 
     // stats
     if (!isPlainObject(parsed.stats)) return fail('BackupValidator: stats must be an object');
@@ -227,6 +230,16 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
       day: {
         date: day.date,
         newMemorizationCompleted: day.newMemorizationCompleted,
+        todayRange: (isPlainObject(day.todayRange) && typeof day.todayRange.fromSurah === 'number')
+          ? {
+              fromSurah: day.todayRange.fromSurah,
+              fromAyah: day.todayRange.fromAyah,
+              toSurah: day.todayRange.toSurah,
+              toAyah: day.todayRange.toAyah,
+              count: day.todayRange.count,
+              isCompleted: !!day.todayRange.isCompleted,
+            }
+          : null,
         completedReviewIds: day.completedReviewIds.slice(),
       },
       stats: {
@@ -289,6 +302,16 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
       newMemorizationCompleted: typeof srcDay.newMemorizationCompleted === 'boolean'
         ? srcDay.newMemorizationCompleted
         : false,
+      todayRange: (isPlainObject(srcDay.todayRange) && typeof srcDay.todayRange.fromSurah === 'number')
+        ? {
+            fromSurah: srcDay.todayRange.fromSurah,
+            fromAyah: srcDay.todayRange.fromAyah,
+            toSurah: srcDay.todayRange.toSurah,
+            toAyah: srcDay.todayRange.toAyah,
+            count: srcDay.todayRange.count,
+            isCompleted: !!srcDay.todayRange.isCompleted,
+          }
+        : null,
       completedReviewIds: Array.isArray(srcDay.completedReviewIds)
         ? srcDay.completedReviewIds.filter(id => typeof id === 'string')
         : [],

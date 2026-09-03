@@ -60,6 +60,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       day: {
         date: today,
         newMemorizationCompleted: false,
+        todayRange: null,
         completedReviewIds: [],
       },
       stats: {
@@ -109,10 +110,15 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     if (!state.day || typeof state.day !== 'object') {
       state.day = {};
     }
+    // Backwards compat: old state may lack todayRange.
+    if (!('todayRange' in state.day)) {
+      state.day.todayRange = null;
+    }
     if (state.day.date !== currentLocalDate) {
       state.day = {
         date: currentLocalDate,
         newMemorizationCompleted: false,
+        todayRange: null,
         completedReviewIds: [],
       };
     }
@@ -164,6 +170,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       day: {
         date: state.day.date,
         newMemorizationCompleted: state.day.newMemorizationCompleted,
+        todayRange: state.day.todayRange ? { ...state.day.todayRange } : null,
         completedReviewIds: [...state.day.completedReviewIds],
       },
       stats: { ...state.stats },
@@ -183,6 +190,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     state.day = {
       date: snap.day.date,
       newMemorizationCompleted: snap.day.newMemorizationCompleted,
+      todayRange: snap.day.todayRange ? { ...snap.day.todayRange } : null,
       completedReviewIds: [...snap.day.completedReviewIds],
     };
     state.stats = { ...snap.stats };
@@ -471,14 +479,27 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     const overdue = getOverdueItems(state);
     const dueIds = overdue.slice(0, Math.max(0, dailyReviewLimit)).map(it => it.id);
     const remainingIds = overdue.slice(dailyReviewLimit).map(it => it.id);
-    const newMemorization = (state.plan.isActive && !state.plan.isCompleted)
-      ? computeNextPlanRange(state.plan)
-      : null;
+
+    // Compute today's memorization range. If already completed, use the
+    // stored range (pointer has since advanced, so recomputing would give
+    // tomorrow's range).
+    let newMemorization = null;
+    const newMemorizationCompleted = state.day.newMemorizationCompleted;
+    if (state.plan.isActive && !state.plan.isCompleted) {
+      if (newMemorizationCompleted && state.day.todayRange) {
+        newMemorization = state.day.todayRange;
+      } else {
+        newMemorization = computeNextPlanRange(state.plan);
+        // Store the range so it stays stable after the pointer advances.
+        if (newMemorization) {
+          state.day.todayRange = { ...newMemorization };
+        }
+      }
+    }
 
     const dueReviews = state.items.filter(it => dueIds.includes(it.id));
     const completedReviewIds = state.day.completedReviewIds.slice();
     const remainingReviewIds = remainingIds;
-    const newMemorizationCompleted = state.day.newMemorizationCompleted;
     const allReviewsCompleted = dueIds.every(id => completedReviewIds.includes(id));
     const dayCompleted = isDayCompleted(state, dailyReviewLimit);
     const streak = state.stats.currentStreak;
@@ -600,6 +621,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     if (!state || !state.day) return false;
     if (!state.day.newMemorizationCompleted) return false;
     state.day.newMemorizationCompleted = false;
+    state.day.todayRange = null;
     return true;
   }
 
