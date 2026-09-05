@@ -284,8 +284,8 @@ function computeStatus(item) {
   حساب المجموعة لها تلقائياً عند أول وصول (lazy init).
 
 ```
-plan.dailyAmount = 5  →  dailyReviewCap = 15
-plan.dailyAmount = 10 →  dailyReviewCap = 30
+plan.dailyAmount = 5,  plan.reviewCap = 3  →  dailyReviewCap = 15
+plan.dailyAmount = 10, plan.reviewCap = 2  →  dailyReviewCap = 20
 ```
 
 ### ٧.٣ اشتقاق اكتمال اليوم (`isDayCompleted`)
@@ -427,8 +427,8 @@ nextReview            = today + 1
 | النوع | المعنى | الحساب |
 |:---|:---|:---|
 | **ayahs** | عدد آيات يومياً | `calculateNextAyahRange(start, dailyAmount)` |
-| **surah** | سورة كاملة يومياً | `calculateNextSurahRange(surah, ayah)` |
-| **page** | صفحة مصحف يومياً | `calculateNextPageRange(page)` (يحتاج `PageIndex`) |
+| **surah** | عدد سور يومياً (افتراضياً 1) | `calculateNextSurahRange(surah, ayah, dailyAmount)` |
+| **page** | عدد صفحات يومياً (افتراضياً 1) | `calculateNextPageRange(page, dailyAmount)` (يحتاج `PageIndex`) |
 
 ### اتجاه الخطة (`plan.direction`)
 
@@ -820,8 +820,8 @@ return `${fromSurah}:${fromAyah}-${toSurah}:${toAyah}`;
 | الثابت | القيمة | الموقع |
 |:---|:---|:---|
 | `SCHEMA_VERSION` | 3 | `memorizationEngine.js` |
-| `DAILY_REVIEW_LIMIT` (fallback ثابت) | 10 | `memorizationView.js` |
-| **حد المراجعة اليومي الفعلي** | `3 × plan.dailyAmount` | `MemorizationEngine.dailyReviewCap` |
+| `plan.reviewCap` (مضاعّف افتراضي) | 3 | `memorizationEngine.js` |
+| **حد المراجعة اليومي الفعلي** | `plan.dailyAmount × plan.reviewCap` | `MemorizationEngine.dailyReviewCap` |
 | `UNDO_WINDOW_MS` | 5000 (ms) | `memorizationView.js` |
 | `EASE_MIN` / `EASE_MAX` | 1.3 / 3.0 | `memorizationEngine.js`, `backupValidator.js` |
 | `DB_NAME` / `DB_VERSION` | `quran_memorization_db` / 1 | `indexedDbAdapter.js` |

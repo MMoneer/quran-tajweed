@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'quran-pwa-v9';
+const CACHE_VERSION = 'quran-pwa-v11';
 
 // GUARDRAIL: every app asset that must work offline MUST be listed here, and
 // CACHE_VERSION must be bumped whenever any of these files changes. Any new

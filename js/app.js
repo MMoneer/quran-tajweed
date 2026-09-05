@@ -28,6 +28,17 @@ const App = (() => {
         navigator.serviceWorker.register('./sw.js', { scope: './' })
           .catch((e) => console.error('SW registration failed:', e));
       });
+      // When a new SW activates (skipWaiting + clients.claim), the open page
+      // may still be running STALE js from the old cache (static assets are
+      // cache-first while navigation is network-first, so index.html can be
+      // newer than the scripts it loads). Reload once so HTML and scripts
+      // come from the same version.
+      let _reloadScheduled = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (_reloadScheduled) return;
+        _reloadScheduled = true;
+        window.location.reload();
+      });
     }
 
     // 1. Check for first-run

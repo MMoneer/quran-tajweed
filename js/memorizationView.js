@@ -18,13 +18,6 @@
  *   - destroy(): clear timers and remove transient nodes (e.g. undo toast).
  */
 const MemorizationView = (() => {
-  /**
-   * Default daily review cap exposed for backwards compatibility. The
-   * actual cap is now derived from the active plan's `dailyAmount`
-   * (multiplied by 3) by MemorizationEngine.dailyReviewCap; this
-   * constant is only used as a fallback / display hint.
-   */
-  const DAILY_REVIEW_LIMIT = 10;
   const UNDO_WINDOW_MS = 5000;
 
   const STATUS_LABEL_AR = Object.freeze({
@@ -130,24 +123,27 @@ const MemorizationView = (() => {
    * Pretty Arabic label for the daily memorization target, respecting
    * `targetType` and `direction`:
    *   'ayahs' → "{N} آيات / يوم"
-   *   'surah' → "{N} سورة / يوم"  (multi-amount only used in backward)
+   *   'surah' → "{N} سورة / يوم"
    *   'page'  → "{N} صفحة / يوم"
-   * Forward surah/page mode stays a single unit/day.
+   * In both forward and backward, the displayed amount matches the
+   * user-entered `dailyAmount` (clamped to >= 1) so the label reflects
+   * what the engine actually schedules.
    */
   function formatPlanDailyTarget(plan) {
     const amount = (plan && Number.isFinite(plan.dailyAmount)) ? plan.dailyAmount : 5;
     const type = (plan && plan.targetType) ? plan.targetType : 'ayahs';
     const isBackward = (plan && plan.direction === 'backward');
     const dir = isBackward ? '← ' : '';
-    if (type === 'surah') {
-      const n = isBackward ? Math.max(1, amount) : 1;
-      return `${dir}${toArabicDigits(n)} سورة / يوم`;
-    }
-    if (type === 'page') {
-      const n = isBackward ? Math.max(1, amount) : 1;
-      return `${dir}${toArabicDigits(n)} صفحة / يوم`;
-    }
-    return `${dir}${toArabicDigits(amount)} آيات / يوم`;
+    const n = Math.max(1, Math.trunc(amount));
+    if (type === 'surah') return `${dir}${toArabicDigits(n)} سورة / يوم`;
+    if (type === 'page') return `${dir}${toArabicDigits(n)} صفحة / يوم`;
+    return `${dir}${toArabicDigits(n)} آيات / يوم`;
+  }
+
+  function formatReviewCap(plan) {
+    const daily = (plan && Number.isFinite(plan.dailyAmount)) ? plan.dailyAmount : 5;
+    const cap = (plan && Number.isFinite(plan.reviewCap)) ? Math.max(1, Math.trunc(plan.reviewCap)) : 3;
+    return `${toArabicDigits(daily * cap)} مراجعة / يوم`;
   }
 
   function statusLabel(status) {
@@ -535,6 +531,16 @@ const MemorizationView = (() => {
       </div>
 
       <div class="plan-editor-row">
+        <label class="plan-editor-label" for="plan-editor-review-cap">عدد المراجعات اليومي</label>
+        <div class="plan-editor-stepper">
+          <button type="button" class="plan-editor-stepper-btn" id="plan-editor-review-cap-dec" aria-label="إنقاص">−</button>
+          <input type="number" min="1" max="20" value="${esc(String(Math.max(1, Math.trunc(plan && Number.isFinite(plan.reviewCap) ? plan.reviewCap : 3))))}" id="plan-editor-review-cap" class="plan-editor-stepper-input" inputmode="numeric">
+          <button type="button" class="plan-editor-stepper-btn" id="plan-editor-review-cap-inc" aria-label="زيادة">+</button>
+        </div>
+        <span class="plan-editor-hint">المراجعات اليومية = وحدة الحفظ اليومي × عدد المراجعات</span>
+      </div>
+
+      <div class="plan-editor-row">
         <label class="plan-editor-label" for="plan-editor-surah">السورة</label>
         <select id="plan-editor-surah" class="plan-editor-select">
           ${surahOptions}
@@ -692,6 +698,35 @@ const MemorizationView = (() => {
     dec?.addEventListener('click', () => writeAmount(Math.max(1, readAmount() - 1)));
     inc?.addEventListener('click', () => writeAmount(Math.min(currentMax(), readAmount() + 1)));
     writeAmount(readAmount());
+
+    // --- reviewCap stepper ---
+    const reviewCapInput = dialog.querySelector('#plan-editor-review-cap');
+    const reviewCapDec = dialog.querySelector('#plan-editor-review-cap-dec');
+    const reviewCapInc = dialog.querySelector('#plan-editor-review-cap-inc');
+    const REVIEW_CAP_MAX = 20;
+
+    function readReviewCap() {
+      if (!reviewCapInput) return 3;
+      const raw = parseInt(reviewCapInput.value, 10);
+      return Number.isFinite(raw) && raw > 0 ? raw : 3;
+    }
+    function writeReviewCap(n) {
+      if (!reviewCapInput) return;
+      reviewCapInput.value = String(n);
+      if (reviewCapDec) reviewCapDec.disabled = n <= 1;
+      if (reviewCapInc) reviewCapInc.disabled = n >= REVIEW_CAP_MAX;
+    }
+    reviewCapDec?.addEventListener('click', () => writeReviewCap(Math.max(1, readReviewCap() - 1)));
+    reviewCapInc?.addEventListener('click', () => writeReviewCap(Math.min(REVIEW_CAP_MAX, readReviewCap() + 1)));
+    writeReviewCap(readReviewCap());
+    reviewCapInput?.addEventListener('input', () => {
+      if (reviewCapInput.value.length > 2) {
+        reviewCapInput.value = reviewCapInput.value.slice(0, 2);
+      }
+      const n = parseInt(reviewCapInput.value, 10);
+      if (Number.isFinite(n) && n > REVIEW_CAP_MAX) reviewCapInput.value = String(REVIEW_CAP_MAX);
+      if (reviewCapInc) reviewCapInc.disabled = Number.isFinite(n) && n >= REVIEW_CAP_MAX;
+    });
     // Hard cap WHILE typing: at most 4 digits (page cap=604 fits; surah=114
     // and ayahs=6236 both fit too). Clamp the live value to the active
     // cap so switching mid-edit cannot leave an out-of-range value.
@@ -771,6 +806,9 @@ const MemorizationView = (() => {
       return;
     }
 
+    const reviewCapInput = dialog.querySelector('#plan-editor-review-cap');
+    const reviewCap = (reviewCapInput ? (parseInt(reviewCapInput.value, 10) || 3) : 3);
+
     // Capture an undo snapshot BEFORE mutating so a save failure can revert.
     MemorizationEngine.ensureCurrentDay(state);
     const snapshot = JSON.parse(JSON.stringify(state));
@@ -782,11 +820,13 @@ const MemorizationView = (() => {
           targetType,
           dailyAmount,
           direction,
+          reviewCap,
         });
       } else {
         MemorizationEngine.activatePlan(state, {
           targetType,
           dailyAmount,
+          reviewCap,
           currentSurah,
           currentAyah,
           direction,
@@ -873,6 +913,10 @@ const MemorizationView = (() => {
           <div class="memorization-plan-info-row">
             <span class="memorization-info-label">الهدف اليومي</span>
             <span class="memorization-info-value">${formatPlanDailyTarget(plan)}</span>
+          </div>
+          <div class="memorization-plan-info-row">
+            <span class="memorization-info-label">حد المراجعة</span>
+            <span class="memorization-info-value">${formatReviewCap(plan)}</span>
           </div>
           <div class="memorization-plan-info-row">
             <span class="memorization-info-label">الموقع الحالي</span>
@@ -1549,7 +1593,6 @@ const MemorizationView = (() => {
     destroy,
     openPlanEditor,
     closePlanEditor,
-    DAILY_REVIEW_LIMIT,
     UNDO_WINDOW_MS,
   };
 })();

@@ -4130,9 +4130,11 @@ body.light-theme .memorization-backlog-alert {
 .plan-editor-ayah-row .plan-editor-ayah-input {
   flex: 0 0 6rem;
 }
-.plan-editor-ayah-hint {
+.plan-editor-ayah-hint,
+.plan-editor-hint {
   font-size: 0.8rem;
   opacity: 0.7;
+  display: block;
 }
 .plan-editor-actions {
   display: flex;

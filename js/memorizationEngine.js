@@ -50,16 +50,20 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
   });
 
   /**
-   * Compute the daily review cap as a multiple of the active plan's daily
-   * target. The cap scales with the user's plan so heavier hifz plans get
-   * proportionally more review slots. Defaults to `defaultAmount` (5) when
-   * the plan is inactive or `dailyAmount` is missing.
+   * Maximum number of review items surfaced per day. The cap is the
+   * user-settable `plan.reviewCap` multiplier (default 3) applied to
+   * `plan.dailyAmount`. Both factors are configurable: `dailyAmount`
+   * controls the forward range size, `reviewCap` controls how many
+   * review slots the user wants relative to that range.
    */
-  function dailyReviewCap(state, defaultAmount = 5) {
+  function dailyReviewCap(state) {
     const daily = (state && state.plan && Number.isFinite(state.plan.dailyAmount))
       ? state.plan.dailyAmount
-      : defaultAmount;
-    return Math.max(1, Math.trunc(Number(daily)) * 3);
+      : 5;
+    const multiplier = (state && state.plan && Number.isFinite(state.plan.reviewCap))
+      ? Math.max(1, Math.trunc(state.plan.reviewCap))
+      : 3;
+    return daily * multiplier;
   }
 
   /**
@@ -73,6 +77,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
         isActive: false,
         targetType: 'ayahs',
         dailyAmount: 5,
+        reviewCap: 3,
         direction: 'forward',
         currentSurah: 1,
         currentAyah: 1,
@@ -173,14 +178,14 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     if (plan.targetType === 'surah') {
       return isBackward
         ? QuranMetaService.calculatePreviousSurahRange(plan.currentSurah, plan.currentAyah, plan.dailyAmount)
-        : QuranMetaService.calculateNextSurahRange(plan.currentSurah, plan.currentAyah);
+        : QuranMetaService.calculateNextSurahRange(plan.currentSurah, plan.currentAyah, plan.dailyAmount);
     }
     if (plan.targetType === 'page') {
       const page = QuranMetaService.getPageOf(plan.currentSurah, plan.currentAyah);
       if (page == null) return null;
       return isBackward
         ? QuranMetaService.calculatePreviousPageRange(page, plan.currentSurah, plan.currentAyah)
-        : QuranMetaService.calculateNextPageRange(page);
+        : QuranMetaService.calculateNextPageRange(page, plan.dailyAmount);
     }
     return isBackward
       ? QuranMetaService.calculatePreviousAyahRange(plan.currentSurah, plan.currentAyah, plan.dailyAmount)
@@ -899,6 +904,9 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
 
   function activatePlan(state, opts = {}) {
     const dailyAmount = Math.max(1, Math.trunc(Number(opts.dailyAmount) || 5));
+    const reviewCap = (Number.isFinite(opts.reviewCap) && opts.reviewCap >= 1)
+      ? Math.max(1, Math.trunc(opts.reviewCap))
+      : 3;
     const targetType = (opts.targetType === 'surah' || opts.targetType === 'page')
       ? opts.targetType
       : 'ayahs';
@@ -912,6 +920,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     state.plan.isActive = true;
     state.plan.targetType = targetType;
     state.plan.dailyAmount = dailyAmount;
+    state.plan.reviewCap = reviewCap;
     state.plan.direction = direction;
     state.plan.currentSurah = currentSurah;
     state.plan.currentAyah = currentAyah;
@@ -959,7 +968,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       throw new Error('MemorizationEngine.updatePlanPointer: state is required');
     }
     if (!state.plan || typeof state.plan !== 'object') {
-      state.plan = { isActive: false, targetType: 'ayahs', dailyAmount: 5, direction: 'forward', currentSurah: 1, currentAyah: 1, isCompleted: false };
+      state.plan = { isActive: false, targetType: 'ayahs', dailyAmount: 5, reviewCap: 3, direction: 'forward', currentSurah: 1, currentAyah: 1, isCompleted: false };
     }
     const plan = state.plan;
 
@@ -980,6 +989,14 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
 
     if (partial.direction !== undefined) {
       plan.direction = (partial.direction === 'backward') ? 'backward' : 'forward';
+    }
+
+    if (partial.reviewCap !== undefined) {
+      const rc = Math.trunc(Number(partial.reviewCap));
+      if (!Number.isFinite(rc) || rc < 1) {
+        throw new RangeError(`MemorizationEngine.updatePlanPointer: invalid reviewCap "${partial.reviewCap}"`);
+      }
+      plan.reviewCap = rc;
     }
 
     if (partial.currentSurah !== undefined) {

@@ -178,20 +178,34 @@ const QuranMetaService = (() => {
   }
 
   /**
-   * Build a memorization range covering the remainder of the current
-   * surah, starting at (startSurah, startAyah). Sets isCompleted iff the
-   * range reaches 114:6.
+   * Build a memorization range starting at `(startSurah, startAyah)` and
+   * spanning exactly `amount` whole surahs forward (default 1). The
+   * range always begins at the pointer and extends forward through the
+   * ends of the next `amount` surahs. If the pointer is mid-surah, the
+   * first surah in the range covers only the remaining ayahs from
+   * `startAyah` to its end; subsequent surahs are whole.
+   *
+   * When `amount` would cross the end of the Quran, the range is clamped
+   * to the last surah and `isCompleted` is set. `amount <= 0` returns
+   * null (no actionable range).
+   *
    * @returns {{fromSurah:number, fromAyah:number, toSurah:number, toAyah:number, count:number, isCompleted:boolean}|null}
    */
-  function calculateNextSurahRange(startSurah, startAyah) {
+  function calculateNextSurahRange(startSurah, startAyah, amount) {
     if (!isValidAyah(startSurah, startAyah)) return null;
-    const total = ayahCounts[startSurah];
+    const amt = (amount === undefined || amount === null) ? 1 : Math.max(0, Math.trunc(amount));
+    if (amt <= 0) return null;
     const fromSurah = startSurah;
     const fromAyah = startAyah;
-    const toSurah = startSurah;
-    const toAyah = total;
-    const count = total - startAyah + 1;
-    const isCompleted = (startSurah === TOTAL_SURAHS && startAyah === total);
+    const lastSurah = Math.min(TOTAL_SURAHS, startSurah + amt - 1);
+    const toSurah = lastSurah;
+    const toAyah = ayahCounts[toSurah];
+    const count = countAyahs(fromSurah, fromAyah, toSurah, toAyah);
+    // isCompleted iff the range extends through the very last ayah of
+    // the Quran AND the user did not start beyond it. Pointer advance
+    // uses getNextPosition; if that returns null, plan.isCompleted is
+    // set in the engine.
+    const isCompleted = (toSurah === TOTAL_SURAHS && toAyah === LAST_AYAHS);
     return {
       fromSurah,
       fromAyah,
@@ -203,29 +217,38 @@ const QuranMetaService = (() => {
   }
 
   /**
-   * Build a memorization range covering exactly one mushaf page starting
-   * at `startPage` (1..604). Looks up the page's ayah range in PageIndex.
-   * Returns null if PageIndex is unavailable.
+   * Build a memorization range covering `amount` consecutive mushaf pages
+   * starting at `startPage` (1..604), default 1. Looks up each page's
+   * ayah range in PageIndex. The end of the range is the last ayah of
+   * the `(startPage + amount - 1)`-th page, clamped to the last page of
+   * the Quran (with `isCompleted` set).
    *
-   * v1 (deprecated): used a `/15 ayahs per page` approximation that was
-   * inaccurate for surahs with variable page density.
+   * Returns null if PageIndex is unavailable or `startPage` is out of
+   * range. `amount <= 0` returns null.
    *
    * @returns {{fromSurah:number, fromAyah:number, toSurah:number, toAyah:number, count:number, isCompleted:boolean}|null}
    */
-  function calculateNextPageRange(startPage) {
+  function calculateNextPageRange(startPage, amount) {
     if (!Number.isInteger(startPage) || startPage < 1 || startPage > TOTAL_PAGES) {
       return null;
     }
+    const amt = (amount === undefined || amount === null) ? 1 : Math.max(0, Math.trunc(amount));
+    if (amt <= 0) return null;
     const cached = (typeof PageIndex !== 'undefined') ? PageIndex.getCached() : null;
     if (!cached || !cached.pageRanges.has(startPage)) return null;
-    const r = cached.pageRanges.get(startPage);
-    const isCompleted = (r.toSurah === TOTAL_SURAHS && r.toAyah === LAST_AYAHS);
+    const startRange = cached.pageRanges.get(startPage);
+    const endPage = Math.min(TOTAL_PAGES, startPage + amt - 1);
+    if (!cached.pageRanges.has(endPage)) return null;
+    const endRange = cached.pageRanges.get(endPage);
+    const isCompleted = (endPage === TOTAL_PAGES
+      && endRange.toSurah === TOTAL_SURAHS
+      && endRange.toAyah === LAST_AYAHS);
     return {
-      fromSurah: r.fromSurah,
-      fromAyah: r.fromAyah,
-      toSurah: r.toSurah,
-      toAyah: r.toAyah,
-      count: countAyahs(r.fromSurah, r.fromAyah, r.toSurah, r.toAyah),
+      fromSurah: startRange.fromSurah,
+      fromAyah: startRange.fromAyah,
+      toSurah: endRange.toSurah,
+      toAyah: endRange.toAyah,
+      count: countAyahs(startRange.fromSurah, startRange.fromAyah, endRange.toSurah, endRange.toAyah),
       isCompleted,
     };
   }

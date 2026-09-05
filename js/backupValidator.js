@@ -152,6 +152,13 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
     if (plan.direction !== undefined && plan.direction !== 'forward' && plan.direction !== 'backward') {
       return fail(`BackupValidator: plan.direction must be 'forward' or 'backward', got "${plan.direction}"`);
     }
+    // plan.reviewCap is optional (older V3 exports predate it) and is
+    // normalized to 3 below. When present it must be a positive integer.
+    if (plan.reviewCap !== undefined && plan.reviewCap !== null) {
+      if (!isPositiveInteger(plan.reviewCap)) {
+        return fail('BackupValidator: plan.reviewCap must be null or integer >= 1');
+      }
+    }
 
     // day
     if (!isPlainObject(parsed.day)) return fail('BackupValidator: day must be an object');
@@ -250,6 +257,8 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
         isActive: plan.isActive,
         targetType: plan.targetType,
         dailyAmount: plan.dailyAmount,
+        reviewCap: (Number.isFinite(plan.reviewCap) && plan.reviewCap >= 1)
+          ? Math.trunc(plan.reviewCap) : 3,
         direction: plan.direction === 'backward' ? 'backward' : 'forward',
         currentSurah: plan.currentSurah,
         currentAyah: plan.currentAyah,
@@ -315,6 +324,7 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
       isActive: typeof srcPlan.isActive === 'boolean' ? srcPlan.isActive : false,
       targetType: VALID_TARGET_TYPES.has(srcPlan.targetType) ? srcPlan.targetType : 'ayahs',
       dailyAmount: isPositiveInteger(srcPlan.dailyAmount) ? srcPlan.dailyAmount : 5,
+      reviewCap: isPositiveInteger(srcPlan.reviewCap) ? srcPlan.reviewCap : 3,
       direction: (srcPlan.direction === 'backward') ? 'backward' : 'forward',
       currentSurah: Number.isInteger(srcPlan.currentSurah) ? srcPlan.currentSurah : 1,
       currentAyah: Number.isInteger(srcPlan.currentAyah) ? srcPlan.currentAyah : 1,
