@@ -3877,6 +3877,24 @@ body.light-theme .memorization-backlog-alert {
   color: #169777;
 }
 
+.memorization-danger-card {
+  border-color: #d9534f;
+}
+
+.memorization-btn-danger {
+  background: #d9534f;
+  color: #ffffff;
+}
+
+.memorization-btn-danger:hover {
+  background: #c9302c;
+}
+
+.memorization-btn-danger:focus {
+  outline: 2px solid #d9534f;
+  outline-offset: 2px;
+}
+
 /* Undo toast --------------------------------------------------- */
 .memorization-undo-toast,
 .undo-toast {
@@ -4037,7 +4055,8 @@ body.light-theme .memorization-backlog-alert {
   display: flex;
   gap: 0.4rem;
 }
-.plan-editor-mode-btn {
+.plan-editor-mode-btn,
+.plan-editor-dir-btn {
   flex: 1;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border, #d0d0d0);
@@ -4047,7 +4066,8 @@ body.light-theme .memorization-backlog-alert {
   font-size: 0.95rem;
   font-family: inherit;
 }
-.plan-editor-mode-btn.active {
+.plan-editor-mode-btn.active,
+.plan-editor-dir-btn.active {
   background: var(--accent, #2563eb);
   color: #fff;
   border-color: var(--accent, #2563eb);
@@ -4110,7 +4130,7 @@ body.light-theme .memorization-backlog-alert {
 .plan-editor-ayah-row .plan-editor-ayah-input {
   flex: 0 0 6rem;
 }
-.plan-editor-ayah-max {
+.plan-editor-ayah-hint {
   font-size: 0.8rem;
   opacity: 0.7;
 }
@@ -4135,6 +4155,7 @@ body.light-theme .memorization-backlog-alert {
     color: #f3f4f6;
   }
   .plan-editor-mode-btn,
+  .plan-editor-dir-btn,
   .plan-editor-stepper-btn,
   .plan-editor-stepper-input,
   .plan-editor-select,

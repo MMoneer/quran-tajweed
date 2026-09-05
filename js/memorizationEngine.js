@@ -40,7 +40,27 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     AYAHS_500: 'ayahs_500',
     AYAHS_1000: 'ayahs_1000',
     FIRST_MASTERED: 'first_mastered',
+    JUZ_1: 'juz_1',
+    JUZ_5: 'juz_5',
+    JUZ_10: 'juz_10',
+    JUZ_15: 'juz_15',
+    JUZ_20: 'juz_20',
+    JUZ_25: 'juz_25',
+    JUZ_30: 'juz_30',
   });
+
+  /**
+   * Compute the daily review cap as a multiple of the active plan's daily
+   * target. The cap scales with the user's plan so heavier hifz plans get
+   * proportionally more review slots. Defaults to `defaultAmount` (5) when
+   * the plan is inactive or `dailyAmount` is missing.
+   */
+  function dailyReviewCap(state, defaultAmount = 5) {
+    const daily = (state && state.plan && Number.isFinite(state.plan.dailyAmount))
+      ? state.plan.dailyAmount
+      : defaultAmount;
+    return Math.max(1, Math.trunc(Number(daily)) * 3);
+  }
 
   /**
    * Build a fresh, empty V3 state.
@@ -53,6 +73,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
         isActive: false,
         targetType: 'ayahs',
         dailyAmount: 5,
+        direction: 'forward',
         currentSurah: 1,
         currentAyah: 1,
         isCompleted: false,
@@ -62,6 +83,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
         newMemorizationCompleted: false,
         todayRange: null,
         completedReviewIds: [],
+        dueReviewIds: [],
       },
       stats: {
         currentStreak: 0,
@@ -101,7 +123,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
   /**
    * Roll the `state.day` forward to `currentLocalDate` if needed. The
    * previous day's `completedReviewIds` / `newMemorizationCompleted` flag
-   * must NOT leak into the new day.
+   * AND the frozen `dueReviewIds` cohort must NOT leak into the new day.
    */
   function ensureCurrentDay(state, currentLocalDate = DateUtils.getLocalDateString()) {
     if (!state || typeof state !== 'object') {
@@ -110,9 +132,12 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     if (!state.day || typeof state.day !== 'object') {
       state.day = {};
     }
-    // Backwards compat: old state may lack todayRange.
+    // Backwards compat: old state may lack todayRange and/or dueReviewIds.
     if (!('todayRange' in state.day)) {
       state.day.todayRange = null;
+    }
+    if (!Array.isArray(state.day.dueReviewIds)) {
+      state.day.dueReviewIds = [];
     }
     if (state.day.date !== currentLocalDate) {
       state.day = {
@@ -120,6 +145,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
         newMemorizationCompleted: false,
         todayRange: null,
         completedReviewIds: [],
+        dueReviewIds: [],
       };
     }
     return state;
@@ -143,17 +169,22 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
    */
   function computeNextPlanRange(plan) {
     if (!plan || typeof plan !== 'object') return null;
+    const isBackward = plan.direction === 'backward';
     if (plan.targetType === 'surah') {
-      return QuranMetaService.calculateNextSurahRange(plan.currentSurah, plan.currentAyah);
+      return isBackward
+        ? QuranMetaService.calculatePreviousSurahRange(plan.currentSurah, plan.currentAyah, plan.dailyAmount)
+        : QuranMetaService.calculateNextSurahRange(plan.currentSurah, plan.currentAyah);
     }
     if (plan.targetType === 'page') {
       const page = QuranMetaService.getPageOf(plan.currentSurah, plan.currentAyah);
       if (page == null) return null;
-      return QuranMetaService.calculateNextPageRange(page);
+      return isBackward
+        ? QuranMetaService.calculatePreviousPageRange(page, plan.currentSurah, plan.currentAyah)
+        : QuranMetaService.calculateNextPageRange(page);
     }
-    return QuranMetaService.calculateNextAyahRange(
-      plan.currentSurah, plan.currentAyah, plan.dailyAmount
-    );
+    return isBackward
+      ? QuranMetaService.calculatePreviousAyahRange(plan.currentSurah, plan.currentAyah, plan.dailyAmount)
+      : QuranMetaService.calculateNextAyahRange(plan.currentSurah, plan.currentAyah, plan.dailyAmount);
   }
 
   /**
@@ -172,6 +203,9 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
         newMemorizationCompleted: state.day.newMemorizationCompleted,
         todayRange: state.day.todayRange ? { ...state.day.todayRange } : null,
         completedReviewIds: [...state.day.completedReviewIds],
+        dueReviewIds: Array.isArray(state.day.dueReviewIds)
+          ? [...state.day.dueReviewIds]
+          : [],
       },
       stats: { ...state.stats },
       items: state.items.map(it => ({ ...it })),
@@ -192,6 +226,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       newMemorizationCompleted: snap.day.newMemorizationCompleted,
       todayRange: snap.day.todayRange ? { ...snap.day.todayRange } : null,
       completedReviewIds: [...snap.day.completedReviewIds],
+      dueReviewIds: Array.isArray(snap.day.dueReviewIds) ? [...snap.day.dueReviewIds] : [],
     };
     state.stats = { ...snap.stats };
     state.items = snap.items.map(it => ({ ...it }));
@@ -206,8 +241,13 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
   function awardBadges(state) {
     const earned = new Set(state.badges);
 
+    // "أول جزء" is granted only after the entire Juz 1 is memorized
+    // (148 ayahs: Al-Fatiha 1-7 + Al-Baqarah 1-141). Computing it from
+    // "≥ 1 ayah" granted the badge the moment the user saved the first
+    // range, which read as a bug in the UI.
+    if (computeJuz1CoveredAyahs(state) >= 148) earned.add(BADGES.FIRST_PORTION);
+
     const totalAyahs = computeTotalMemorizedAyahs(state);
-    if (totalAyahs >= 1) earned.add(BADGES.FIRST_PORTION);
     if (totalAyahs >= 100) earned.add(BADGES.AYAHS_100);
     if (totalAyahs >= 500) earned.add(BADGES.AYAHS_500);
     if (totalAyahs >= 1000) earned.add(BADGES.AYAHS_1000);
@@ -217,6 +257,15 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
 
     const masteredCount = state.items.filter(it => it.status === STATUS.MASTERED).length;
     if (masteredCount >= 1) earned.add(BADGES.FIRST_MASTERED);
+
+    const completedJuz = computeCompletedJuz(state);
+    if (completedJuz >= 1) earned.add(BADGES.JUZ_1);
+    if (completedJuz >= 5) earned.add(BADGES.JUZ_5);
+    if (completedJuz >= 10) earned.add(BADGES.JUZ_10);
+    if (completedJuz >= 15) earned.add(BADGES.JUZ_15);
+    if (completedJuz >= 20) earned.add(BADGES.JUZ_20);
+    if (completedJuz >= 25) earned.add(BADGES.JUZ_25);
+    if (completedJuz >= 30) earned.add(BADGES.JUZ_30);
 
     state.badges = [...earned];
   }
@@ -251,15 +300,46 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
   }
 
   /**
-   * Has today's review+new-memorization quota been satisfied?
-   * Active plan : new memorization AND all currently due reviews done.
-   * Inactive    : all currently due reviews done.
+   * Establish (and freeze) today's review cohort if not yet set.
+   *
+   * The cohort is the canonical "what the user must review today" — a
+   * snapshot of the highest-priority overdue IDs at the moment today's
+   * queue is first built, capped at 3 × the active plan's daily target.
+   *
+   * Once established, the cohort is fixed for the day: reviewing an item
+   * MUST NOT promote backlog items into the same day's quota. The cohort
+   * is cleared on day rollover (`ensureCurrentDay`).
+   *
+   * Backwards compatibility: older saved states lack `day.dueReviewIds`.
+   * On first access we compute and persist the cohort from the live
+   * overdue list so existing users get a sensible first-day cohort.
    */
-  function isDayCompleted(state, dailyReviewLimit = 10) {
-    const due = getDueReviewIds(state, dailyReviewLimit);
+  function ensureTodayCohort(state, currentLocalDate) {
+    if (!state || !state.day) return [];
+    // NOTE: an empty array is NOT treated as "already computed" — fresh
+    // states (createInitialState) start with [] and expect the cohort to
+    // be computed lazily on first access. Caching the empty cohort would
+    // permanently freeze it to zero.
+    if (Array.isArray(state.day.dueReviewIds) && state.day.dueReviewIds.length > 0) {
+      return state.day.dueReviewIds;
+    }
+    const cap = dailyReviewCap(state);
+    const cohort = getOverdueItems(state, currentLocalDate).slice(0, cap).map(it => it.id);
+    state.day.dueReviewIds = cohort;
+    return cohort;
+  }
+
+  /**
+   * Has today's review+new-memorization quota been satisfied?
+   * Active plan : new memorization AND every ID in the frozen cohort is done.
+   * Inactive    : every ID in the frozen cohort is done.
+   */
+  function isDayCompleted(state, _unused, currentLocalDate) {
+    const cohort = ensureTodayCohort(state, currentLocalDate);
     if (state.plan.isActive && !state.day.newMemorizationCompleted) return false;
-    for (const id of due) {
-      if (!state.day.completedReviewIds.includes(id)) return false;
+    const completed = state.day.completedReviewIds;
+    for (const id of cohort) {
+      if (!completed.includes(id)) return false;
     }
     return true;
   }
@@ -289,18 +369,46 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       return null;
     }
 
+    // Snapshot for one-level undo BEFORE any mutation (including the
+    // todayRange freeze below), honoring the engine's "snapshot before
+    // commit" contract for both the normal and the dedup code paths.
+    state._undoSnapshot = takeSnapshot(state);
+
+    // Freeze the completed range BEFORE advancing the pointer. This way
+    // the stored todayRange always reflects the actual completed range,
+    // even when the UI calls us directly without first rendering the
+    // summary that populates this field as a side-effect.
+    state.day.todayRange = {
+      fromSurah: range.fromSurah,
+      fromAyah: range.fromAyah,
+      toSurah: range.toSurah,
+      toAyah: range.toAyah,
+      count: range.count,
+      isCompleted: !!range.isCompleted,
+    };
+
     const id = buildItemId(range.fromSurah, range.fromAyah, range.toSurah, range.toAyah);
     const existing = findItem(state, id);
     if (existing) {
       // Dedup guard: this range was already recorded (e.g. from a prior
       // session or plan position). The item is NOT re-created, but the
       // pointer MUST still advance — the user explicitly clicked "تم الحفظ".
-      const next = QuranMetaService.getNextPosition(range.toSurah, range.toAyah);
-      if (next) {
-        plan.currentSurah = next.surah;
-        plan.currentAyah = next.ayah;
-      } else {
+      // (The undo snapshot was already taken above, before any mutation.)
+      const isBackwardDedup = plan.direction === 'backward';
+      if (isBackwardDedup && range.fromSurah === 1 && range.fromAyah === 1) {
+        plan.currentSurah = 1;
+        plan.currentAyah = 1;
         plan.isCompleted = true;
+      } else {
+        const next = isBackwardDedup
+          ? QuranMetaService.getPreviousPosition(range.fromSurah, range.fromAyah)
+          : QuranMetaService.getNextPosition(range.toSurah, range.toAyah);
+        if (next) {
+          plan.currentSurah = next.surah;
+          plan.currentAyah = next.ayah;
+        } else {
+          plan.isCompleted = true;
+        }
       }
       state.day.newMemorizationCompleted = true;
       if (isDayCompleted(state)) {
@@ -308,9 +416,6 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       }
       return existing;
     }
-
-    // Snapshot for one-level undo.
-    state._undoSnapshot = takeSnapshot(state);
 
     const today = state.day.date;
     const nextReview = DateUtils.addDays(today, 1);
@@ -330,16 +435,26 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     };
     state.items.push(newItem);
 
-    // Advance pointer to the position immediately AFTER the just-committed range.
-    const next = QuranMetaService.getNextPosition(range.toSurah, range.toAyah);
-    if (next) {
-      plan.currentSurah = next.surah;
-      plan.currentAyah = next.ayah;
+    // Advance pointer to the position immediately BEFORE the just-committed range.
+    const isBackward = plan.direction === 'backward';
+    if (isBackward && range.fromSurah === 1 && range.fromAyah === 1) {
+      // Reached the start of the Quran in one step. Pin the pointer to
+      // 1:1 so the user sees a stable "done" position instead of the
+      // previous pointer (which would point at the start of a range we
+      // already committed). Mark the plan as completed.
+      plan.currentSurah = 1;
+      plan.currentAyah = 1;
+      plan.isCompleted = true;
     } else {
-      plan.isCompleted = true;
-    }
-    if (range.isCompleted) {
-      plan.isCompleted = true;
+      const next = isBackward
+        ? QuranMetaService.getPreviousPosition(range.fromSurah, range.fromAyah)
+        : QuranMetaService.getNextPosition(range.toSurah, range.toAyah);
+      if (next) {
+        plan.currentSurah = next.surah;
+        plan.currentAyah = next.ayah;
+      } else if (range.isCompleted) {
+        plan.isCompleted = true;
+      }
     }
 
     state.day.newMemorizationCompleted = true;
@@ -358,9 +473,17 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
    *
    * Snapshot is taken BEFORE applying the rating, so `undoLastReview`
    * can restore the previous state exactly.
+   *
+   * Guards:
+   *   - The item MUST be in today's frozen review cohort. Items that
+   *     became due only after the cohort was established, or that were
+   *     never due, MUST be rejected so the engine never rates backlog
+   *     promotions.
+   *   - The item MUST be currently due (its `nextReview <= today`).
+   *   - The same item MUST NOT be rated twice in the same day.
    */
-  function reviewItem(state, itemId, rating) {
-    ensureCurrentDay(state);
+  function reviewItem(state, itemId, rating, currentLocalDate) {
+    ensureCurrentDay(state, currentLocalDate);
     if (!VALID_RATINGS.has(rating)) {
       throw new Error('MemorizationEngine: invalid rating ' + rating);
     }
@@ -369,6 +492,25 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       throw new Error('MemorizationEngine: unknown item ' + itemId);
     }
     const today = state.day.date;
+
+    // Duplicate same-day rating guard: an item rated earlier today is
+    // already in `completedReviewIds`. A second submission would corrupt
+    // scheduling counters, so refuse it. The UI also locks the buttons
+    // while a review save is in flight; this guard is the belt-and-braces
+    // engine-side defence against rapid double-clicks.
+    if (state.day.completedReviewIds.includes(item.id)) {
+      throw new Error('MemorizationEngine: item ' + itemId + ' already reviewed today');
+    }
+
+    // The item must be currently due. Backwards-compat: if today's cohort
+    // is missing (older saved state), compute it now.
+    const cohort = ensureTodayCohort(state, currentLocalDate);
+    if (!cohort.includes(item.id)) {
+      throw new Error('MemorizationEngine: item ' + itemId + ' is not in today\'s frozen review cohort');
+    }
+    if (item.nextReview > today) {
+      throw new Error('MemorizationEngine: item ' + itemId + ' is not yet due');
+    }
 
     // Snapshot before mutating.
     state._undoSnapshot = takeSnapshot(state);
@@ -414,7 +556,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     state.stats.totalReviews += 1;
 
     awardBadges(state);
-    if (isDayCompleted(state)) {
+    if (isDayCompleted(state, undefined, currentLocalDate)) {
       tryAdvanceStreak(state);
     }
     return item;
@@ -441,6 +583,22 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
   }
 
   /**
+   * Wipe the entire memorization state and replace it with a fresh initial
+   * state. The schema version, surah/ayah bounds, and `state.day.date` are
+   * re-anchored to today. The internal `_undoSnapshot` is also cleared so
+   * a stale snapshot can never resurrect the wiped state via `undoLastReview`.
+   *
+   * Returns the freshly created state. The caller is responsible for
+   * persisting it (via IndexedDbAdapter.saveState) and for broadcasting the
+   * change to other tabs.
+   */
+  function resetAllState(today = DateUtils.getLocalDateString()) {
+    const fresh = createInitialState(today);
+    fresh._undoSnapshot = null;
+    return fresh;
+  }
+
+  /**
    * Items whose `nextReview <= today`. Sorted deterministically by:
    *   1. earliest `nextReview` (most overdue first)
    *   2. smallest `interval` (most urgent first)
@@ -462,23 +620,35 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
   }
 
   /**
-   * IDs of items that should be reviewed today. Honors `dailyReviewLimit`
-   * by surfacing the highest-priority slice of the overdue list. Items
-   * NOT in the slice are NOT marked done — they remain due.
+   * IDs of items that should be reviewed today. Returns the frozen
+   * cohort established by `ensureTodayCohort`, NOT a live slice of the
+   * overdue list. Items become due later, after the cohort is fixed, are
+   * intentionally excluded; they remain in the backlog until tomorrow.
+   *
+   * `dailyReviewLimit` is preserved in the signature for public-API
+   * compatibility but is no longer used: the cap is derived from the
+   * active plan's `dailyAmount` (×3) by `dailyReviewCap`.
    */
-  function getDueReviewIds(state, dailyReviewLimit = 10) {
-    const overdue = getOverdueItems(state);
-    return overdue.slice(0, Math.max(0, dailyReviewLimit)).map(it => it.id);
+  function getDueReviewIds(state, _dailyReviewLimit = 10) {
+    return ensureTodayCohort(state).slice();
   }
 
   /**
    * Build the UI-facing summary for today.
+   *
+   * `dailyReviewLimit` is retained for public-API compatibility; the
+   * actual cap is derived from the active plan's `dailyAmount` (×3) via
+   * the frozen cohort.
    */
-  function getDailyTaskSummary(state, dailyReviewLimit = 10) {
-    ensureCurrentDay(state);
-    const overdue = getOverdueItems(state);
-    const dueIds = overdue.slice(0, Math.max(0, dailyReviewLimit)).map(it => it.id);
-    const remainingIds = overdue.slice(dailyReviewLimit).map(it => it.id);
+  function getDailyTaskSummary(state, _dailyReviewLimit = 10, currentLocalDate) {
+    ensureCurrentDay(state, currentLocalDate);
+    const cap = dailyReviewCap(state);
+    const overdue = getOverdueItems(state, currentLocalDate);
+    const overdueIds = overdue.map(it => it.id);
+    const cohort = ensureTodayCohort(state, currentLocalDate);
+    const dueIds = cohort.slice();
+    const cohortSet = new Set(dueIds);
+    const remainingIds = overdueIds.filter(id => !cohortSet.has(id));
 
     // Compute today's memorization range. If already completed, use the
     // stored range (pointer has since advanced, so recomputing would give
@@ -492,16 +662,23 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
         newMemorization = computeNextPlanRange(state.plan);
         // Store the range so it stays stable after the pointer advances.
         if (newMemorization) {
-          state.day.todayRange = { ...newMemorization };
+          state.day.todayRange = {
+            fromSurah: newMemorization.fromSurah,
+            fromAyah: newMemorization.fromAyah,
+            toSurah: newMemorization.toSurah,
+            toAyah: newMemorization.toAyah,
+            count: newMemorization.count,
+            isCompleted: !!newMemorization.isCompleted,
+          };
         }
       }
     }
 
     const dueReviews = state.items.filter(it => dueIds.includes(it.id));
     const completedReviewIds = state.day.completedReviewIds.slice();
-    const remainingReviewIds = remainingIds;
-    const allReviewsCompleted = dueIds.every(id => completedReviewIds.includes(id));
-    const dayCompleted = isDayCompleted(state, dailyReviewLimit);
+    const completedSet = new Set(completedReviewIds);
+    const allReviewsCompleted = dueIds.every(id => completedSet.has(id));
+    const dayCompleted = isDayCompleted(state, null, currentLocalDate);
     const streak = state.stats.currentStreak;
 
     return {
@@ -509,11 +686,12 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       newMemorization,
       dueReviews,
       completedReviewIds,
-      remainingReviewIds,
+      remainingReviewIds: remainingIds,
       newMemorizationCompleted,
       allReviewsCompleted,
       dayCompleted,
       streak,
+      cohortCap: cap,
     };
   }
 
@@ -540,12 +718,146 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     return total;
   }
 
+  /**
+   * Count unique ayahs across the items array, deduping overlaps. Walks
+   * forward from the very first memorized ayah position, tracking which
+   * (surah, ayah) tuples have already been counted. Returns 0 for an
+   * empty items array.
+   *
+   * This is the canonical "how many ayahs have you memorized" figure:
+   * overlapping or duplicate ranges contribute their ayahs exactly once.
+   * Capped at 6,236 (the total Quran ayah count) so corrupted items can
+   * never produce an inflated figure.
+   */
   function computeTotalMemorizedAyahs(state) {
+    if (!state || !Array.isArray(state.items) || state.items.length === 0) return 0;
+    const SAFETY_CAP = 6236;
+    const items = state.items;
+    // Track the latest (by total ayah offset) memorized ayah seen so far.
+    // For each item, count the ayahs that are STRICTLY AFTER that offset.
+    // Items are processed in their canonical (fromSurah, fromAyah) order
+    // so the "highest offset so far" is a 1-D scan.
+    const ordered = items.slice().sort((a, b) => {
+      if (a.fromSurah !== b.fromSurah) return a.fromSurah - b.fromSurah;
+      return a.fromAyah - b.fromAyah;
+    });
     let total = 0;
-    for (const it of state.items) {
-      total += countAyahsInRange(it.fromSurah, it.fromAyah, it.toSurah, it.toAyah);
+    let lastEndOffset = -1; // offset of the last ayah already counted
+    for (const it of ordered) {
+      const startOffset = ayahOffset(it.fromSurah, it.fromAyah);
+      const endOffset = ayahOffset(it.toSurah, it.toAyah);
+      if (startOffset < 0 || endOffset < startOffset) continue;
+      // Count ayahs in (startOffset..endOffset] that are after lastEndOffset.
+      const newStart = Math.max(startOffset, lastEndOffset + 1);
+      if (newStart > endOffset) continue; // fully covered
+      total += (endOffset - newStart + 1);
+      if (total > SAFETY_CAP) return SAFETY_CAP;
+      lastEndOffset = Math.max(lastEndOffset, endOffset);
     }
-    return total;
+    return Math.min(total, SAFETY_CAP);
+  }
+
+  // Linear ayah offset (1-indexed): sum of ayahCounts[1..s-1] + a.
+  function ayahOffset(surah, ayah) {
+    if (surah < 1 || surah > QuranMetaService.TOTAL_SURAHS) return -1;
+    let off = 0;
+    for (let s = 1; s < surah; s++) off += QuranMetaService.getSurahAyahCount(s);
+    return off + ayah;
+  }
+
+  /**
+   * Number of distinct Juz-1 ayahs covered by the user's memorized items.
+   *
+   * Juz 1 spans surah 1 ayah 1 through surah 2 ayah 141 — 148 ayahs in
+   * total (Al-Fatiha's 7 + the first 141 ayahs of Al-Baqarah). The badge
+   * "أول جزء" is granted when this coverage reaches the full 148.
+   *
+   * Items are walked in canonical (fromSurah, fromAyah) order so the
+   * "highest offset so far" is a 1-D scan; overlapping ranges contribute
+   * each ayah at most once. This mirrors the dedup logic in
+   * `computeTotalMemorizedAyahs`.
+   *
+   * Returns the count of distinct Juz-1 ayahs covered (capped at 148).
+   * Callers compare the result to 148 to decide badge eligibility.
+   */
+  function computeJuz1CoveredAyahs(state) {
+    if (!state || !Array.isArray(state.items) || state.items.length === 0) return 0;
+    const JUZ1_START_OFFSET = 1;                          // surah 1, ayah 1
+    const JUZ1_END_OFFSET   = ayahOffset(2, 141);         // surah 2, ayah 141
+    if (JUZ1_END_OFFSET < JUZ1_START_OFFSET) return 0;
+    const ordered = state.items.slice().sort((a, b) => {
+      if (a.fromSurah !== b.fromSurah) return a.fromSurah - b.fromSurah;
+      return a.fromAyah - b.fromAyah;
+    });
+    let covered = 0;
+    let lastCovered = JUZ1_START_OFFSET - 1;
+    for (const it of ordered) {
+      const startOffset = ayahOffset(it.fromSurah, it.fromAyah);
+      const endOffset = ayahOffset(it.toSurah, it.toAyah);
+      if (startOffset < 0 || endOffset < startOffset) continue;
+      // Clip the item's range to the Juz 1 window.
+      const clipStart = Math.max(startOffset, JUZ1_START_OFFSET);
+      const clipEnd = Math.min(endOffset, JUZ1_END_OFFSET);
+      if (clipStart > clipEnd) continue;
+      const newStart = Math.max(clipStart, lastCovered + 1);
+      if (newStart > clipEnd) continue;
+      covered += (clipEnd - newStart + 1);
+      if (covered >= (JUZ1_END_OFFSET - JUZ1_START_OFFSET + 1)) {
+        return JUZ1_END_OFFSET - JUZ1_START_OFFSET + 1;
+      }
+      lastCovered = Math.max(lastCovered, clipEnd);
+    }
+    return Math.min(covered, JUZ1_END_OFFSET - JUZ1_START_OFFSET + 1);
+  }
+
+  /**
+   * Count how many complete juz (parts) the user has memorized.
+   * A juz is "complete" when every ayah in its range is covered by at
+   * least one memorized item. Uses the global JUZ_DATA array (loaded
+   * from data/juz-data.js) for juz boundaries.
+   *
+   * @returns {number} 0..30
+   */
+  function computeCompletedJuz(state) {
+    if (!state || !Array.isArray(state.items) || state.items.length === 0) return 0;
+    if (typeof JUZ_DATA === 'undefined' || !Array.isArray(JUZ_DATA)) return 0;
+
+    const ordered = state.items.slice().sort((a, b) => {
+      if (a.fromSurah !== b.fromSurah) return a.fromSurah - b.fromSurah;
+      return a.fromAyah - b.fromAyah;
+    });
+
+    // Build a sorted list of covered offsets for fast scanning.
+    const coveredRanges = ordered.map(it => ({
+      start: ayahOffset(it.fromSurah, it.fromAyah),
+      end: ayahOffset(it.toSurah, it.toAyah),
+    })).filter(r => r.start >= 0 && r.end >= r.start);
+
+    let completed = 0;
+    for (let i = 0; i < JUZ_DATA.length; i++) {
+      const juzStart = ayahOffset(JUZ_DATA[i].surah, JUZ_DATA[i].ayah);
+      const nextEntry = JUZ_DATA[i + 1];
+      const juzEnd = nextEntry
+        ? ayahOffset(nextEntry.surah, nextEntry.ayah) - 1
+        : ayahOffset(114, 6);
+      if (juzStart < 0 || juzEnd < juzStart) continue;
+
+      const juzTotal = juzEnd - juzStart + 1;
+      let covered = 0;
+      let lastCovered = juzStart - 1;
+      for (const r of coveredRanges) {
+        const clipStart = Math.max(r.start, juzStart);
+        const clipEnd = Math.min(r.end, juzEnd);
+        if (clipStart > clipEnd) continue;
+        const newStart = Math.max(clipStart, lastCovered + 1);
+        if (newStart > clipEnd) continue;
+        covered += (clipEnd - newStart + 1);
+        lastCovered = Math.max(lastCovered, clipEnd);
+        if (covered >= juzTotal) break;
+      }
+      if (covered >= juzTotal) completed++;
+    }
+    return completed;
   }
 
   function computeStatusCounts(state) {
@@ -562,15 +874,23 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     return counts;
   }
 
-  function getStatistics(state, dailyReviewLimit = 10) {
+  function getStatistics(state, _dailyReviewLimit = 10) {
+    const overdue = getOverdueItems(state);
+    const overdueCount = overdue.length;
+    const cap = dailyReviewCap(state);
+    const cohort = ensureTodayCohort(state);
+    const cohortSize = cohort.length;
+    // "Backlog" = overdue items not in today's frozen cohort.
+    const backlogCount = Math.max(0, overdueCount - cohortSize);
     return {
       totalMemorizedAyahs: computeTotalMemorizedAyahs(state),
+      completedJuz: computeCompletedJuz(state),
       byStatus: computeStatusCounts(state),
       totalReviews: state.stats.totalReviews,
       currentStreak: state.stats.currentStreak,
       longestStreak: state.stats.longestStreak,
-      dueReviewCount: getOverdueItems(state).length,
-      backlogCount: Math.max(0, getOverdueItems(state).length - dailyReviewLimit),
+      dueReviewCount: cohortSize,
+      backlogCount,
       lastCompletedDay: state.stats.lastCompletedDay,
     };
   }
@@ -582,6 +902,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     const targetType = (opts.targetType === 'surah' || opts.targetType === 'page')
       ? opts.targetType
       : 'ayahs';
+    const direction = (opts.direction === 'backward') ? 'backward' : 'forward';
     const currentSurah = (Number.isInteger(opts.currentSurah) && opts.currentSurah >= 1 && opts.currentSurah <= QuranMetaService.TOTAL_SURAHS)
       ? opts.currentSurah
       : 1;
@@ -591,6 +912,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     state.plan.isActive = true;
     state.plan.targetType = targetType;
     state.plan.dailyAmount = dailyAmount;
+    state.plan.direction = direction;
     state.plan.currentSurah = currentSurah;
     state.plan.currentAyah = currentAyah;
     state.plan.isCompleted = false;
@@ -637,7 +959,7 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       throw new Error('MemorizationEngine.updatePlanPointer: state is required');
     }
     if (!state.plan || typeof state.plan !== 'object') {
-      state.plan = { isActive: false, targetType: 'ayahs', dailyAmount: 5, currentSurah: 1, currentAyah: 1, isCompleted: false };
+      state.plan = { isActive: false, targetType: 'ayahs', dailyAmount: 5, direction: 'forward', currentSurah: 1, currentAyah: 1, isCompleted: false };
     }
     const plan = state.plan;
 
@@ -656,6 +978,10 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       plan.dailyAmount = n;
     }
 
+    if (partial.direction !== undefined) {
+      plan.direction = (partial.direction === 'backward') ? 'backward' : 'forward';
+    }
+
     if (partial.currentSurah !== undefined) {
       if (!QuranMetaService.validatePosition(partial.currentSurah, 1)) {
         throw new RangeError(`MemorizationEngine.updatePlanPointer: invalid currentSurah "${partial.currentSurah}"`);
@@ -670,9 +996,17 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
       plan.currentAyah = partial.currentAyah;
     }
 
-    if (plan.currentSurah === QuranMetaService.TOTAL_SURAHS
-        && plan.currentAyah === QuranMetaService.LAST_AYAHS) {
-      plan.isCompleted = true;
+    // Editing the plan pointer to a valid earlier position re-activates
+    // a previously-completed plan so the user can resume from there.
+    // The plan is marked complete ONLY when the final range is actually
+    // recorded via `completeNewMemorization` — never by the user merely
+    // moving the pointer to the last ayah.
+    const isForward = plan.direction !== 'backward';
+    const isAtBoundary = isForward
+      ? (plan.currentSurah === QuranMetaService.TOTAL_SURAHS && plan.currentAyah === QuranMetaService.LAST_AYAHS)
+      : (plan.currentSurah === 1 && plan.currentAyah === 1);
+    if (!isAtBoundary) {
+      plan.isCompleted = false;
     }
 
     // The user explicitly edited the plan. Reset today's "new memorization
@@ -700,11 +1034,18 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     computeStatus,
     getStatistics,
     computeTotalMemorizedAyahs,
+    computeJuz1CoveredAyahs,
+    computeCompletedJuz,
     computeStatusCounts,
     activatePlan,
     updatePlanPointer,
     deactivatePlan,
     buildItemId,
+    resetAllState,
+    dailyReviewCap,
+    ensureTodayCohort,
+    isDayCompleted,
+    awardBadges,
   };
 })(
   typeof QuranMetaService !== 'undefined' ? QuranMetaService

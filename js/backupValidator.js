@@ -40,6 +40,13 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
     'ayahs_500',
     'ayahs_1000',
     'first_mastered',
+    'juz_1',
+    'juz_5',
+    'juz_10',
+    'juz_15',
+    'juz_20',
+    'juz_25',
+    'juz_30',
   ]);
 
   const EASE_MIN = 1.3;
@@ -138,6 +145,13 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
     if (!validateQuranPosition(plan.currentSurah, plan.currentAyah)) {
       return fail(`BackupValidator: invalid plan position ${plan.currentSurah}:${plan.currentAyah}`);
     }
+    // plan.direction is optional (older V3 exports predate it) and is
+    // normalized to 'forward' below. When present it must be a valid
+    // value — reject garbage rather than silently flipping the user's
+    // memorization direction.
+    if (plan.direction !== undefined && plan.direction !== 'forward' && plan.direction !== 'backward') {
+      return fail(`BackupValidator: plan.direction must be 'forward' or 'backward', got "${plan.direction}"`);
+    }
 
     // day
     if (!isPlainObject(parsed.day)) return fail('BackupValidator: day must be an object');
@@ -154,6 +168,19 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
     }
     if (day.todayRange !== undefined && day.todayRange !== null && !isPlainObject(day.todayRange)) {
       return fail('BackupValidator: day.todayRange must be an object or null');
+    }
+    // dueReviewIds (frozen daily review cohort) is optional for backwards
+    // compatibility with V3 backups written before this field existed.
+    // When present it MUST be an array of strings.
+    if (day.dueReviewIds !== undefined) {
+      if (!Array.isArray(day.dueReviewIds)) {
+        return fail('BackupValidator: day.dueReviewIds must be an array when present');
+      }
+      for (const id of day.dueReviewIds) {
+        if (typeof id !== 'string') {
+          return fail('BackupValidator: day.dueReviewIds entries must be strings');
+        }
+      }
     }
 
     // stats
@@ -223,6 +250,7 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
         isActive: plan.isActive,
         targetType: plan.targetType,
         dailyAmount: plan.dailyAmount,
+        direction: plan.direction === 'backward' ? 'backward' : 'forward',
         currentSurah: plan.currentSurah,
         currentAyah: plan.currentAyah,
         isCompleted: plan.isCompleted,
@@ -241,6 +269,11 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
             }
           : null,
         completedReviewIds: day.completedReviewIds.slice(),
+        // Default the frozen cohort to []. The engine re-establishes it
+        // lazily on first access, so importing an older backup is safe.
+        dueReviewIds: Array.isArray(day.dueReviewIds)
+          ? day.dueReviewIds.filter(id => typeof id === 'string')
+          : [],
       },
       stats: {
         currentStreak: stats.currentStreak,
@@ -282,6 +315,7 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
       isActive: typeof srcPlan.isActive === 'boolean' ? srcPlan.isActive : false,
       targetType: VALID_TARGET_TYPES.has(srcPlan.targetType) ? srcPlan.targetType : 'ayahs',
       dailyAmount: isPositiveInteger(srcPlan.dailyAmount) ? srcPlan.dailyAmount : 5,
+      direction: (srcPlan.direction === 'backward') ? 'backward' : 'forward',
       currentSurah: Number.isInteger(srcPlan.currentSurah) ? srcPlan.currentSurah : 1,
       currentAyah: Number.isInteger(srcPlan.currentAyah) ? srcPlan.currentAyah : 1,
       isCompleted: typeof srcPlan.isCompleted === 'boolean' ? srcPlan.isCompleted : false,
@@ -314,6 +348,12 @@ const BackupValidator = ((QuranMetaService, DateUtils) => {
         : null,
       completedReviewIds: Array.isArray(srcDay.completedReviewIds)
         ? srcDay.completedReviewIds.filter(id => typeof id === 'string')
+        : [],
+      // Older V3 backups may not carry the frozen review cohort. Default
+      // to []. The engine populates this field lazily on first access,
+      // so migration is safe for legacy backups.
+      dueReviewIds: Array.isArray(srcDay.dueReviewIds)
+        ? srcDay.dueReviewIds.filter(id => typeof id === 'string')
         : [],
     };
 

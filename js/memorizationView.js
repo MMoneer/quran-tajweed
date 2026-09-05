@@ -18,6 +18,12 @@
  *   - destroy(): clear timers and remove transient nodes (e.g. undo toast).
  */
 const MemorizationView = (() => {
+  /**
+   * Default daily review cap exposed for backwards compatibility. The
+   * actual cap is now derived from the active plan's `dailyAmount`
+   * (multiplied by 3) by MemorizationEngine.dailyReviewCap; this
+   * constant is only used as a fallback / display hint.
+   */
   const DAILY_REVIEW_LIMIT = 10;
   const UNDO_WINDOW_MS = 5000;
 
@@ -37,6 +43,13 @@ const MemorizationView = (() => {
     ayahs_500:        { icon: '📚', label: '٥٠٠ آية' },
     ayahs_1000:       { icon: '🏅', label: '١٠٠٠ آية' },
     first_mastered:   { icon: '⭐', label: 'أول إتقان' },
+    juz_1:            { icon: '🥉', label: 'جزء واحد' },
+    juz_5:            { icon: '🥈', label: '٥ أجزاء' },
+    juz_10:           { icon: '🥇', label: '١٠ أجزاء' },
+    juz_15:           { icon: '💎', label: '١٥ جزءاً' },
+    juz_20:           { icon: '🕌', label: '٢٠ جزءاً' },
+    juz_25:           { icon: '🌟', label: '٢٥ جزءاً' },
+    juz_30:           { icon: '👑', label: 'القرآن كاملاً' },
   });
 
   const STATUS_ORDER = [
@@ -115,17 +128,26 @@ const MemorizationView = (() => {
 
   /**
    * Pretty Arabic label for the daily memorization target, respecting
-   * `targetType`:
+   * `targetType` and `direction`:
    *   'ayahs' → "{N} آيات / يوم"
-   *   'surah' → "سورة كاملة / يوم"
-   *   'page'  → "صفحة كاملة / يوم"
+   *   'surah' → "{N} سورة / يوم"  (multi-amount only used in backward)
+   *   'page'  → "{N} صفحة / يوم"
+   * Forward surah/page mode stays a single unit/day.
    */
   function formatPlanDailyTarget(plan) {
     const amount = (plan && Number.isFinite(plan.dailyAmount)) ? plan.dailyAmount : 5;
     const type = (plan && plan.targetType) ? plan.targetType : 'ayahs';
-    if (type === 'surah') return 'سورة كاملة / يوم';
-    if (type === 'page') return 'صفحة كاملة / يوم';
-    return `${toArabicDigits(amount)} آيات / يوم`;
+    const isBackward = (plan && plan.direction === 'backward');
+    const dir = isBackward ? '← ' : '';
+    if (type === 'surah') {
+      const n = isBackward ? Math.max(1, amount) : 1;
+      return `${dir}${toArabicDigits(n)} سورة / يوم`;
+    }
+    if (type === 'page') {
+      const n = isBackward ? Math.max(1, amount) : 1;
+      return `${dir}${toArabicDigits(n)} صفحة / يوم`;
+    }
+    return `${dir}${toArabicDigits(amount)} آيات / يوم`;
   }
 
   function statusLabel(status) {
@@ -188,10 +210,45 @@ const MemorizationView = (() => {
     try {
       await adapter.saveState(state);
       if (messageOnSuccess) showTransientToast(messageOnSuccess, false);
+      return true;
     } catch (e) {
       console.error('MemorizationView: saveState failed', e);
       showTransientToast(messageOnError || 'تعذر حفظ التغيير. يرجى المحاولة مجدداً.', true);
+      return false;
     }
+  }
+
+  /**
+   * Roll back the last in-memory mutation via the engine's undo snapshot,
+   * so the UI never shows progress that did not persist. No-op when there
+   * is no snapshot (e.g. nothing was mutated).
+   */
+  function rollbackLastMutation() {
+    try { MemorizationEngine.undoLastReview(state); } catch (e) { /* ignore */ }
+  }
+
+  /**
+   * Toggle an in-flight flag and reflect it on the rating buttons so
+   * rapid double-clicks cannot fire a second review before the first one
+   * has rendered. The engine ALSO rejects same-day duplicates (belt and
+   * braces); this is purely a UX safeguard against the brief window
+   * between click and re-render.
+   *
+   * Buttons disabled by the lock are marked with `data-saving="1"` so we
+   * can release exactly those on unlock — buttons that were already
+   * disabled because their item was reviewed today are left untouched.
+   */
+  let reviewSaveInFlight = false;
+  function setReviewButtonsLocked(locked) {
+    document.querySelectorAll('.memorization-rating-btn').forEach((btn) => {
+      if (locked) {
+        btn.setAttribute('data-saving', '1');
+        btn.disabled = true;
+      } else if (btn.getAttribute('data-saving') === '1') {
+        btn.removeAttribute('data-saving');
+        btn.disabled = false;
+      }
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -204,8 +261,9 @@ const MemorizationView = (() => {
     if (initPromise) return initPromise;
     initPromise = (async () => {
       adapter = new IndexedDbAdapter();
+      let loaded = null;
       try {
-        const loaded = await adapter.loadState();
+        loaded = await adapter.loadState();
         if (loaded && typeof loaded === 'object' && loaded.version === MemorizationEngine.SCHEMA_VERSION) {
           state = loaded;
         } else {
@@ -216,8 +274,27 @@ const MemorizationView = (() => {
         state = MemorizationEngine.createInitialState();
       }
 
-      // Roll day forward if the stored day is stale.
+      // Roll day forward if the stored day is stale, then persist the
+      // rolled-forward state. Without persisting, every F5 would re-run
+      // the roll-forward (and rebuild the cohort) — the dashboard would
+      // flicker between the previous and current day depending on when
+      // the user pressed reload. Persisting once during init makes the
+      // IDB the single source of truth for "today" so the first render
+      // after a reload is always consistent.
+      const loadedDay = (loaded && loaded.day && typeof loaded.day.date === 'string')
+        ? loaded.day.date
+        : null;
       MemorizationEngine.ensureCurrentDay(state);
+      const prevBadges = [...state.badges];
+      MemorizationEngine.awardBadges(state);
+      const badgesChanged = state.badges.length !== prevBadges.length || state.badges.some((b, i) => b !== prevBadges[i]);
+      if ((loadedDay && loadedDay !== state.day.date) || badgesChanged) {
+        try {
+          await adapter.saveState(state);
+        } catch (e) {
+          console.warn('MemorizationView.init: failed to persist rolled-forward day', e);
+        }
+      }
 
       // Best-effort: warm the surah name cache for richer labels.
       await ensureSurahNameMap();
@@ -234,20 +311,79 @@ const MemorizationView = (() => {
       }
 
       // Cross-tab sync: when another tab updates state, re-render.
-      window.addEventListener('storage', (event) => {
-        if (!event || !event.key) return;
-        if (event.key === 'quran_memorization_update') {
-          // Reload on the next tick so we don't race with the writer tab.
-          reloadFromStorage();
-        }
-      });
+      // ORPHAN("memorizationViewListeners"): listeners are registered ONCE
+      // for the lifetime of the module (guard below). Re-running init()
+      // after a bfcache restore must NOT stack duplicate listeners or a
+      // second polling interval.
+      if (_listenersRegistered) return;
+      _listenersRegistered = true;
 
-      // In-tab cross-instance sync (e.g. two MemorizationView instances).
-      window.addEventListener('quran_memorization_state_changed', () => {
-        reloadFromStorage();
-      });
+      window.addEventListener('storage', _onStorageEvent);
+      window.addEventListener('quran_memorization_state_changed', _onStateChangedEvent);
+
+      // Clock-change recovery: when the tab regains focus (e.g. the user
+      // changed the system clock to advance the calendar, then came back
+      // to the tab), re-roll the day and re-render. Without this, the
+      // dashboard can show stale data until the user presses F5 — and
+      // even then the update is intermittent because the SW may serve
+      // cached assets. The render() call already invokes
+      // `ensureCurrentDay`, so the cohort is rebuilt correctly.
+      window.addEventListener('focus', _onClockChangeRecovery);
+      document.addEventListener('visibilitychange', _onClockChangeRecovery);
+
+      // Periodic polling: detect day changes that focus/visibility events
+      // might miss (e.g. F5 reload where the SW serves cached index.html,
+      // or the user changing the clock without switching tabs). Every 10s
+      // we compare the stored day against the live clock and re-render
+      // if a rollover is needed.
+      let _lastCheckedDay = state ? state.day.date : null;
+      _dayPollingInterval = setInterval(() => {
+        if (!state || document.hidden) return;
+        const today = DateUtils.getLocalDateString();
+        if (_lastCheckedDay !== today) {
+          _lastCheckedDay = today;
+          render();
+        }
+      }, 10 * 1000);
+
+      // Bfcache recovery: some browsers (notably Firefox) restore the
+      // page from the back/forward cache on F5, which skips the JS
+      // init entirely and leaves the old state in memory. The pageshow
+      // event with persisted===true signals this case — we reset
+      // initPromise so the next init() call re-runs from scratch.
+      window.addEventListener('pageshow', _onPageShow);
     })();
     return initPromise;
+  }
+
+  // ---------------------------------------------------------------------
+  // Module-level event handlers (registered exactly once — see init)
+  // ---------------------------------------------------------------------
+
+  function _onStorageEvent(event) {
+    if (!event || !event.key) return;
+    if (event.key === 'quran_memorization_update') {
+      // Reload on the next tick so we don't race with the writer tab.
+      reloadFromStorage();
+    }
+    return;
+  }
+
+  function _onStateChangedEvent() {
+    reloadFromStorage();
+  }
+
+  function _onClockChangeRecovery() {
+    if (!state || !document.hidden) {
+      if (state) render();
+    }
+  }
+
+  function _onPageShow(e) {
+    if (e.persisted) {
+      initPromise = null;
+      init();
+    }
   }
 
   async function reloadFromStorage() {
@@ -296,15 +432,23 @@ const MemorizationView = (() => {
       return;
     }
     if (!state) return;
+    const _prevDay = state.day && state.day.date;
     MemorizationEngine.ensureCurrentDay(state);
+    // When the day rolls forward outside of init() (e.g. via the 60s
+    // polling timer, focus handler, or a cross-tab storage event),
+    // persist the new day to IDB so the next F5 starts from the
+    // correct day instead of re-loading the stale one.
+    if (_prevDay && state.day && state.day.date !== _prevDay) {
+      persist().catch(() => {});
+    }
 
     const container = getContainer();
     if (!container) return;
 
     clearUndoTimers();
 
-    const summary = MemorizationEngine.getDailyTaskSummary(state, DAILY_REVIEW_LIMIT);
-    const stats = MemorizationEngine.getStatistics(state, DAILY_REVIEW_LIMIT);
+    const summary = MemorizationEngine.getDailyTaskSummary(state);
+    const stats = MemorizationEngine.getStatistics(state);
 
     const html = [
       renderHeader(),
@@ -315,6 +459,7 @@ const MemorizationView = (() => {
       renderStatsSection(stats),
       renderBadgesSection(stats),
       renderBackupSection(),
+      renderDangerSection(),
     ].join('\n');
 
     container.innerHTML = html;
@@ -355,11 +500,13 @@ const MemorizationView = (() => {
   function buildPlanEditorModalHtml(plan) {
     const targetType = (plan && plan.targetType) ? plan.targetType : 'ayahs';
     const dailyAmount = (plan && Number.isFinite(plan.dailyAmount)) ? plan.dailyAmount : 5;
+    const direction = (plan && plan.direction === 'backward') ? 'backward' : 'forward';
     const currentSurah = (plan && Number.isInteger(plan.currentSurah)) ? plan.currentSurah : 1;
     const currentAyah = (plan && Number.isInteger(plan.currentAyah)) ? plan.currentAyah : 1;
-    const showStepper = targetType === 'ayahs';
     const surahOptions = surahListOptionsHtml(currentSurah);
     const surahMax = QuranMetaService.getSurahAyahCount(currentSurah);
+    const amountMeta = getAmountMeta(targetType);
+    const safeAmount = Math.min(amountMeta.max, Math.max(1, dailyAmount));
     return `
       <div class="plan-editor-row">
         <label class="plan-editor-label">نوع الهدف</label>
@@ -370,11 +517,19 @@ const MemorizationView = (() => {
         </div>
       </div>
 
-      <div class="plan-editor-row" id="plan-editor-stepper-row" ${showStepper ? '' : 'hidden'}>
-        <label class="plan-editor-label" for="plan-editor-amount">عدد الآيات اليومي</label>
+      <div class="plan-editor-row">
+        <label class="plan-editor-label">اتجاه الحفظ</label>
+        <div class="plan-editor-mode-segmented" role="radiogroup" aria-label="اتجاه الحفظ">
+          <button type="button" class="plan-editor-dir-btn ${direction === 'forward' ? 'active' : ''}" data-dir="forward" role="radio" aria-checked="${direction === 'forward'}">من البداية للنهاية</button>
+          <button type="button" class="plan-editor-dir-btn ${direction === 'backward' ? 'active' : ''}" data-dir="backward" role="radio" aria-checked="${direction === 'backward'}">من النهاية للبداية</button>
+        </div>
+      </div>
+
+      <div class="plan-editor-row" id="plan-editor-stepper-row">
+        <label class="plan-editor-label" for="plan-editor-amount" id="plan-editor-amount-label">${esc(amountMeta.label)}</label>
         <div class="plan-editor-stepper">
           <button type="button" class="plan-editor-stepper-btn" id="plan-editor-amount-dec" aria-label="إنقاص">−</button>
-          <input type="number" min="1" value="${esc(String(dailyAmount))}" id="plan-editor-amount" class="plan-editor-stepper-input" inputmode="numeric">
+          <input type="number" min="1" max="${esc(String(amountMeta.max))}" value="${esc(String(safeAmount))}" id="plan-editor-amount" class="plan-editor-stepper-input" inputmode="numeric">
           <button type="button" class="plan-editor-stepper-btn" id="plan-editor-amount-inc" aria-label="زيادة">+</button>
         </div>
       </div>
@@ -390,7 +545,7 @@ const MemorizationView = (() => {
         <label class="plan-editor-label" for="plan-editor-ayah">الآية</label>
         <div class="plan-editor-ayah-row">
           <input type="number" min="1" max="${esc(String(surahMax))}" value="${esc(String(currentAyah))}" id="plan-editor-ayah" class="plan-editor-ayah-input" inputmode="numeric">
-          <span class="plan-editor-ayah-max" id="plan-editor-ayah-max">${toArabicDigits(surahMax)}</span>
+          <span class="plan-editor-ayah-hint" id="plan-editor-ayah-hint">(من ${toArabicDigits(1)} إلى ${toArabicDigits(surahMax)})</span>
         </div>
       </div>
 
@@ -399,6 +554,24 @@ const MemorizationView = (() => {
         <button type="button" class="memorization-btn memorization-btn-primary" id="plan-editor-save">حفظ التغييرات</button>
       </div>
     `;
+  }
+
+  /**
+   * Per-targetType stepper config. The label switches between
+   * "عدد الآيات اليومي" / "عدد السور اليومي" / "عدد الصفحات اليومي"
+   * and the cap reflects the natural maximum for that unit
+   * (6236 / 114 / 604). Forward surah mode keeps a single surah; the
+   * multi-amount range is currently only used by backward surah mode
+   * (see calculatePreviousSurahRange).
+   */
+  function getAmountMeta(targetType) {
+    if (targetType === 'surah') {
+      return { label: 'عدد السور اليومي', max: QuranMetaService.TOTAL_SURAHS };
+    }
+    if (targetType === 'page') {
+      return { label: 'عدد الصفحات اليومي', max: QuranMetaService.TOTAL_PAGES };
+    }
+    return { label: 'عدد الآيات اليومي', max: 6236 };
   }
 
   let planEditorDialog = null;
@@ -448,26 +621,32 @@ const MemorizationView = (() => {
     const dialog = planEditorDialog;
     if (!dialog) return;
 
-    dialog.querySelectorAll('.plan-editor-mode-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const mode = btn.dataset.mode;
-        dialog.querySelectorAll('.plan-editor-mode-btn').forEach(b => {
-          b.classList.remove('active');
-          b.setAttribute('aria-checked', 'false');
-        });
-        btn.classList.add('active');
-        btn.setAttribute('aria-checked', 'true');
-        const stepperRow = dialog.querySelector('#plan-editor-stepper-row');
-        if (stepperRow) {
-          if (mode === 'ayahs') stepperRow.removeAttribute('hidden');
-          else stepperRow.setAttribute('hidden', '');
-        }
-      });
-    });
-
+    const amountInput = dialog.querySelector('#plan-editor-amount');
     const dec = dialog.querySelector('#plan-editor-amount-dec');
     const inc = dialog.querySelector('#plan-editor-amount-inc');
-    const amountInput = dialog.querySelector('#plan-editor-amount');
+    const amountLabel = dialog.querySelector('#plan-editor-amount-label');
+    const surahSelect = dialog.querySelector('#plan-editor-surah');
+    const ayahInput = dialog.querySelector('#plan-editor-ayah');
+    const ayahHint = dialog.querySelector('#plan-editor-ayah-hint');
+
+    function currentMode() {
+      const active = dialog.querySelector('.plan-editor-mode-btn.active');
+      return active ? active.dataset.mode : 'ayahs';
+    }
+
+    function applyAmountMode() {
+      const meta = getAmountMeta(currentMode());
+      if (amountLabel) amountLabel.textContent = meta.label;
+      if (amountInput) {
+        amountInput.setAttribute('max', String(meta.max));
+        // Clamp the current value into the new range so a user switching
+        // from "آيات: 20" to "سور" never sees a value above 114.
+        const n = parseInt(amountInput.value, 10);
+        const clamped = Number.isFinite(n) ? Math.min(meta.max, Math.max(1, n)) : 1;
+        amountInput.value = String(clamped);
+      }
+    }
+
     function readAmount() {
       if (!amountInput) return 5;
       const raw = parseInt(amountInput.value, 10);
@@ -477,14 +656,62 @@ const MemorizationView = (() => {
       if (!amountInput) return;
       amountInput.value = String(n);
       if (dec) dec.disabled = n <= 1;
+      const cap = currentMax();
+      if (inc) inc.disabled = n >= cap;
     }
-    dec?.addEventListener('click', () => writeAmount(Math.max(1, readAmount() - 1)));
-    inc?.addEventListener('click', () => writeAmount(readAmount() + 1));
-    writeAmount(readAmount());
+    function currentMax() {
+      const meta = getAmountMeta(currentMode());
+      return meta.max;
+    }
 
-    const surahSelect = dialog.querySelector('#plan-editor-surah');
-    const ayahInput = dialog.querySelector('#plan-editor-ayah');
-    const ayahMaxSpan = dialog.querySelector('#plan-editor-ayah-max');
+    dialog.querySelectorAll('.plan-editor-mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        dialog.querySelectorAll('.plan-editor-mode-btn').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-checked', 'false');
+        });
+        btn.classList.add('active');
+        btn.setAttribute('aria-checked', 'true');
+        applyAmountMode();
+        // Re-clamp the +/- buttons against the new cap.
+        writeAmount(readAmount());
+      });
+    });
+
+    dialog.querySelectorAll('.plan-editor-dir-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        dialog.querySelectorAll('.plan-editor-dir-btn').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-checked', 'false');
+        });
+        btn.classList.add('active');
+        btn.setAttribute('aria-checked', 'true');
+      });
+    });
+
+    dec?.addEventListener('click', () => writeAmount(Math.max(1, readAmount() - 1)));
+    inc?.addEventListener('click', () => writeAmount(Math.min(currentMax(), readAmount() + 1)));
+    writeAmount(readAmount());
+    // Hard cap WHILE typing: at most 4 digits (page cap=604 fits; surah=114
+    // and ayahs=6236 both fit too). Clamp the live value to the active
+    // cap so switching mid-edit cannot leave an out-of-range value.
+    amountInput?.addEventListener('input', () => {
+      if (amountInput.value.length > 4) {
+        amountInput.value = amountInput.value.slice(0, 4);
+      }
+      const n = parseInt(amountInput.value, 10);
+      const cap = currentMax();
+      if (Number.isFinite(n) && n > cap) amountInput.value = String(cap);
+      const capN = currentMax();
+      if (inc) inc.disabled = Number.isFinite(n) && n >= capN;
+    });
+
+    function updateAyahHint(max) {
+      if (ayahHint) {
+        ayahHint.textContent = `(من ${toArabicDigits(1)} إلى ${toArabicDigits(max)})`;
+      }
+    }
+
     surahSelect?.addEventListener('change', () => {
       const id = parseInt(surahSelect.value, 10);
       const max = QuranMetaService.getSurahAyahCount(id);
@@ -495,7 +722,18 @@ const MemorizationView = (() => {
           ayahInput.value = '1';
         }
       }
-      if (ayahMaxSpan) ayahMaxSpan.textContent = toArabicDigits(max);
+      updateAyahHint(max);
+    });
+    // Hard cap WHILE typing: no surah exceeds 286 ayahs (3 digits), and
+    // the value may not exceed the currently selected surah's count.
+    ayahInput?.addEventListener('input', () => {
+      if (ayahInput.value.length > 3) {
+        ayahInput.value = ayahInput.value.slice(0, 3);
+      }
+      const n = parseInt(ayahInput.value, 10);
+      const sid = surahSelect ? parseInt(surahSelect.value, 10) : 1;
+      const smax = Number.isInteger(sid) ? QuranMetaService.getSurahAyahCount(sid) : 286;
+      if (Number.isFinite(n) && n > smax) ayahInput.value = String(smax);
     });
 
     dialog.querySelector('#plan-editor-cancel')?.addEventListener('click', closePlanEditor);
@@ -509,18 +747,33 @@ const MemorizationView = (() => {
 
     const modeBtn = dialog.querySelector('.plan-editor-mode-btn.active');
     const targetType = modeBtn ? modeBtn.dataset.mode : 'ayahs';
+    const dirBtn = dialog.querySelector('.plan-editor-dir-btn.active');
+    const direction = dirBtn ? dirBtn.dataset.dir : 'forward';
     const amountInput = dialog.querySelector('#plan-editor-amount');
-    const dailyAmount = amountInput ? Math.max(1, parseInt(amountInput.value, 10) || 5) : 5;
+    const amountMeta = getAmountMeta(targetType);
+    // Clamp to the cap for the selected target type (ayahs=6236,
+    // surah=114, page=604). The daily target can never exceed the
+    // total count of the unit chosen.
+    let dailyAmount = amountInput ? (parseInt(amountInput.value, 10) || 1) : 1;
+    dailyAmount = Math.min(amountMeta.max, Math.max(1, dailyAmount));
+    if (amountInput) amountInput.value = String(dailyAmount);
     const surahSelect = dialog.querySelector('#plan-editor-surah');
     const ayahInput = dialog.querySelector('#plan-editor-ayah');
     const currentSurah = surahSelect ? parseInt(surahSelect.value, 10) : 1;
-    const currentAyah = ayahInput ? parseInt(ayahInput.value, 10) : 1;
+    // Clamp the ayah to the selected surah's count (max possible anywhere
+    // is 286 — no surah exceeds it). Reflects the clamp back in the field.
+    let currentAyah = ayahInput ? (parseInt(ayahInput.value, 10) || 1) : 1;
+    currentAyah = Math.min(QuranMetaService.getSurahAyahCount(currentSurah), Math.max(1, currentAyah));
+    if (ayahInput) ayahInput.value = String(currentAyah);
 
     if (!QuranMetaService.validatePosition(currentSurah, currentAyah)) {
       showTransientToast('موقع غير صالح. تحقق من السورة والآية.', true);
       return;
     }
 
+    // Capture an undo snapshot BEFORE mutating so a save failure can revert.
+    MemorizationEngine.ensureCurrentDay(state);
+    const snapshot = JSON.parse(JSON.stringify(state));
     try {
       if (state.plan.isActive) {
         MemorizationEngine.updatePlanPointer(state, {
@@ -528,6 +781,7 @@ const MemorizationView = (() => {
           currentAyah,
           targetType,
           dailyAmount,
+          direction,
         });
       } else {
         MemorizationEngine.activatePlan(state, {
@@ -535,14 +789,28 @@ const MemorizationView = (() => {
           dailyAmount,
           currentSurah,
           currentAyah,
+          direction,
         });
         MemorizationEngine.ensureCurrentDay(state);
       }
-      await persist('تم تحديث خطة الحفظ.', 'تعذر حفظ الخطة. حاول مجدداً.');
+      const ok = await persist('تم تحديث خطة الحفظ.', 'تعذر حفظ الخطة. حاول مجدداً.');
+      if (!ok) {
+        // Save failed — restore in-memory state to the pre-edit copy
+        // and drop any undo snapshot so a stale "undo" cannot revert
+        // against the pre-edit baseline.
+        Object.assign(state, snapshot);
+        state._undoSnapshot = null;
+        return;
+      }
       closePlanEditor();
       render();
     } catch (e) {
       console.error('MemorizationView: save plan failed', e);
+      // Engine threw (invalid input, etc.) — restore state so the dialog
+      // can be re-opened against the unchanged record. Clear the undo
+      // snapshot for the same reason as the persist-failure branch above.
+      Object.assign(state, snapshot);
+      state._undoSnapshot = null;
       showTransientToast((e && e.message) || 'تعذر حفظ الخطة.', true);
     }
   }
@@ -782,6 +1050,7 @@ const MemorizationView = (() => {
       { icon: '🔥', label: 'السلسلة الحالية', value: toArabicDigits(stats.currentStreak || 0), sub: 'يوم متتالٍ' },
       { icon: '🏆', label: 'أطول سلسلة', value: toArabicDigits(stats.longestStreak || 0), sub: 'يوم' },
       { icon: '📖', label: 'مجموع الآيات المحفوظة', value: toArabicDigits(stats.totalMemorizedAyahs || 0), sub: 'آية' },
+      { icon: '📚', label: 'الأجزاء المكتملة', value: toArabicDigits(stats.completedJuz || 0), sub: 'جزء' },
       { icon: '📝', label: 'إجمالي المراجعات', value: toArabicDigits(stats.totalReviews || 0), sub: 'مراجعة' },
     ];
     const cardsHtml = cards.map(c => `
@@ -885,6 +1154,24 @@ const MemorizationView = (() => {
     `;
   }
 
+  function renderDangerSection() {
+    return `
+      <section class="memorization-card memorization-danger-card">
+        <div class="memorization-card-title">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span>إعادة الضبط</span>
+        </div>
+        <p class="memorization-card-sub">
+          إعادة ضبط الحفظ والمراجعة تمسح جميع النطاقات المحفوظة والإحصاءات والإنجازات. لن تستطيع التراجع عن هذه الخطوة بعد التأكيد.
+        </p>
+        <button type="button" id="mem-reset-all" class="memorization-btn memorization-btn-danger">
+          <i class="fa-solid fa-trash-can"></i>
+          <span>إعادة ضبط الحفظ والمراجعة</span>
+        </button>
+      </section>
+    `;
+  }
+
   // ---------------------------------------------------------------------
   // Action wiring
   // ---------------------------------------------------------------------
@@ -924,6 +1211,9 @@ const MemorizationView = (() => {
 
     const importInput = document.getElementById('mem-import-backup-input');
     importInput?.addEventListener('change', onImportBackup);
+
+    const resetAllBtn = document.getElementById('mem-reset-all');
+    resetAllBtn?.addEventListener('click', onResetAll);
   }
 
   async function onStartPlan() {
@@ -934,46 +1224,69 @@ const MemorizationView = (() => {
     if (!confirm('هل أنت متأكد من إيقاف خطة الحفظ الحالية؟ ستبقى المراجعات قائمة لكن لن يتم تحديد نطاق جديد.')) {
       return;
     }
+    const snapshot = JSON.parse(JSON.stringify(state));
     MemorizationEngine.deactivatePlan(state);
-    try {
-      await adapter.saveState(state);
-      emitCrossTabUpdate();
-      showTransientToast('تم إيقاف الخطة.');
-      render();
-    } catch (e) {
-      console.error('MemorizationView: failed to stop plan', e);
-      showTransientToast('تعذر حفظ التغيير. حاول مجدداً.', true);
+    const ok = await persist('تم إيقاف الخطة.', 'تعذر حفظ التغيير. حاول مجدداً.');
+    if (!ok) {
+      Object.assign(state, snapshot);
+      state._undoSnapshot = null;
+      return;
     }
+    emitCrossTabUpdate();
+    render();
   }
 
   async function onCompleteNew() {
+    // Capture pre-mutation snapshot so a save failure can revert.
+    MemorizationEngine.ensureCurrentDay(state);
+    const snapshot = JSON.parse(JSON.stringify(state));
     MemorizationEngine.completeNewMemorization(state);
-    try {
-      await adapter.saveState(state);
-      emitCrossTabUpdate();
-      showTransientToast('ما شاء الله! تم تسجيل حفظك.');
-      render();
-    } catch (e) {
-      console.error('MemorizationView: failed to record new memorization', e);
-      showTransientToast('تعذر حفظ التقدم. حاول مجدداً.', true);
+    const ok = await persist('ما شاء الله! تم تسجيل حفظك.', 'تعذر حفظ التقدم. حاول مجدداً.');
+    if (!ok) {
+      // Save failed — restore in-memory state to the pre-commit copy.
+      Object.assign(state, snapshot);
+      // Drop any undo snapshot so a stale "undo last review" doesn't try
+      // to revert the now-restored state.
+      state._undoSnapshot = null;
+      return;
     }
+    emitCrossTabUpdate();
+    render();
   }
 
   async function onReview(itemId, rating) {
-    MemorizationEngine.reviewItem(state, itemId, rating);
-    try {
-      await adapter.saveState(state);
-      emitCrossTabUpdate();
-    } catch (e) {
-      console.error('MemorizationView: failed to persist review', e);
-      // Best-effort: undo the in-memory mutation if persistence failed so
-      // the UI does not show progress that did not actually save.
-      try { MemorizationEngine.undoLastReview(state); } catch (e2) { /* ignore */ }
-      showTransientToast('تعذر حفظ المراجعة. حاول مجدداً.', true);
+    if (reviewSaveInFlight) {
+      // Rapid double-click guard: ignore re-submissions while a save is
+      // still in flight. The engine also rejects same-day duplicates.
       return;
     }
-    render();
-    showUndoToast();
+    reviewSaveInFlight = true;
+    setReviewButtonsLocked(true);
+    try {
+      MemorizationEngine.reviewItem(state, itemId, rating);
+      const ok = await (async () => {
+        try {
+          await adapter.saveState(state);
+          return true;
+        } catch (e) {
+          console.error('MemorizationView: failed to persist review', e);
+          return false;
+        }
+      })();
+      if (!ok) {
+        // Best-effort: undo the in-memory mutation if persistence failed
+        // so the UI does not show progress that did not actually save.
+        rollbackLastMutation();
+        showTransientToast('تعذر حفظ المراجعة. حاول مجدداً.', true);
+        return;
+      }
+      emitCrossTabUpdate();
+      render();
+      showUndoToast();
+    } finally {
+      reviewSaveInFlight = false;
+      setReviewButtonsLocked(false);
+    }
   }
 
   async function onResetItem(itemId) {
@@ -983,18 +1296,17 @@ const MemorizationView = (() => {
     if (!confirm(`هل تريد إعادة ضبط "${rangeLabel}" إلى بداية مرحلة التعلم؟`)) {
       return;
     }
+    const snapshot = JSON.parse(JSON.stringify(state));
     const ok = MemorizationEngine.resetItem(state, itemId);
     if (!ok) return;
-    try {
-      await adapter.saveState(state);
-      emitCrossTabUpdate();
-      showTransientToast('تمت إعادة ضبط النطاق.');
-      render();
-    } catch (e) {
-      console.error('MemorizationView: failed to persist reset', e);
-      try { MemorizationEngine.undoLastReview(state); } catch (e2) { /* ignore */ }
-      showTransientToast('تعذر حفظ التغيير. حاول مجدداً.', true);
+    const saved = await persist('تمت إعادة ضبط النطاق.', 'تعذر حفظ التغيير. حاول مجدداً.');
+    if (!saved) {
+      Object.assign(state, snapshot);
+      state._undoSnapshot = null;
+      return;
     }
+    emitCrossTabUpdate();
+    render();
   }
 
   // ---------------------------------------------------------------------
@@ -1179,12 +1491,53 @@ const MemorizationView = (() => {
     input.value = '';
   }
 
+  async function onResetAll() {
+    if (!confirm('هل أنت متأكد من إعادة ضبط الحفظ والمراجعة بالكامل؟ سيتم مسح جميع النطاقات والإحصاءات والإنجازات ولا يمكن التراجع.')) {
+      return;
+    }
+    if (!confirm('تأكيد نهائي: لن تستطيع استعادة هذه البيانات. متابعة المسح؟')) {
+      return;
+    }
+    // Capture the full pre-reset state so a save failure can restore it.
+    const previousState = JSON.parse(JSON.stringify(state));
+    state = MemorizationEngine.resetAllState();
+    try {
+      await adapter.saveState(state);
+      emitCrossTabUpdate();
+      showTransientToast('تمت إعادة ضبط الحفظ والمراجعة.');
+      render();
+    } catch (e) {
+      console.error('MemorizationView: failed to persist reset-all', e);
+      // Restore the in-memory state to the pre-reset copy and clear any
+      // undo snapshot so the UI does not show a wiped state that was
+      // never persisted.
+      state = previousState;
+      state._undoSnapshot = null;
+      showTransientToast('تعذر إكمال إعادة الضبط. حاول مجدداً.', true);
+    }
+  }
+
   // ---------------------------------------------------------------------
   // destroy (called by router on leaving the section)
   // ---------------------------------------------------------------------
 
+  let _dayPollingInterval = null;
+  let _listenersRegistered = false;
+
   function destroy() {
     clearUndoTimers();
+    if (_dayPollingInterval) {
+      clearInterval(_dayPollingInterval);
+      _dayPollingInterval = null;
+    }
+    if (_listenersRegistered) {
+      window.removeEventListener('storage', _onStorageEvent);
+      window.removeEventListener('quran_memorization_state_changed', _onStateChangedEvent);
+      window.removeEventListener('focus', _onClockChangeRecovery);
+      document.removeEventListener('visibilitychange', _onClockChangeRecovery);
+      window.removeEventListener('pageshow', _onPageShow);
+      _listenersRegistered = false;
+    }
     const container = getContainer();
     if (container) container.innerHTML = '';
     lastRenderedSignature = null;

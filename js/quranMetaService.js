@@ -230,6 +230,152 @@ const QuranMetaService = (() => {
     };
   }
 
+  /**
+   * Return the position of the ayah BEFORE `(surah, ayah)`.
+   * Returns `null` for 1:1 (the very first ayah).
+   */
+  function getPreviousPosition(surah, ayah) {
+    if (!isValidAyah(surah, ayah)) return null;
+    if (surah === 1 && ayah === 1) return null;
+    if (ayah > 1) return { surah, ayah: ayah - 1 };
+    return { surah: surah - 1, ayah: ayahCounts[surah - 1] };
+  }
+
+  /**
+   * Build a memorization range going BACKWARD from `(startSurah, startAyah)`,
+   * spanning exactly `amount` ayahs. The range ends at startSurah:startAyah
+   * and extends backward.
+   */
+  function calculatePreviousAyahRange(startSurah, startAyah, amount) {
+    if (!isValidAyah(startSurah, startAyah)) return null;
+    const toSurah = startSurah;
+    const toAyah = startAyah;
+    let remaining = Math.max(0, Math.trunc(amount));
+    let curSurah = startSurah;
+    let curAyah = startAyah;
+    let fromSurah = startSurah;
+    let fromAyah = startAyah;
+    let taken = 0;
+    let reachedStart = false;
+
+    while (remaining > 0) {
+      if (curSurah < 1) {
+        reachedStart = true;
+        curSurah = 1;
+        curAyah = 1;
+        fromSurah = curSurah;
+        fromAyah = curAyah;
+        break;
+      }
+      const room = curAyah;
+      if (remaining <= room) {
+        fromAyah = curAyah - remaining + 1;
+        fromSurah = curSurah;
+        taken += remaining;
+        remaining = 0;
+        if (fromSurah === 1 && fromAyah === 1) reachedStart = true;
+        break;
+      }
+      taken += room;
+      remaining -= room;
+      curSurah -= 1;
+      curAyah = ayahCounts[curSurah] || 0;
+      fromSurah = curSurah;
+      fromAyah = curAyah;
+    }
+
+    return {
+      fromSurah,
+      fromAyah,
+      toSurah,
+      toAyah,
+      count: taken,
+      isCompleted: reachedStart,
+    };
+  }
+
+  /**
+   * Build a range going backward from `(startSurah, startAyah)`, spanning
+   * `amount` WHOLE surahs (default 1). The range always ends at the
+   * pointer and extends backward through the beginnings of the preceding
+   * surahs. If the pointer is mid-surah, the range is anchored at
+   * `1:startAyah` (i.e. the first `startAyah` ayahs of the current surah).
+   *
+   * When `amount` exceeds the distance to 1:1, the range is clamped to
+   * the start of the Quran and `isCompleted` is set. `amount <= 0`
+   * returns an empty range anchored at the start with `count: 0`.
+   */
+  function calculatePreviousSurahRange(startSurah, startAyah, amount) {
+    if (!isValidAyah(startSurah, startAyah)) return null;
+    const amt = (amount === undefined || amount === null) ? 1 : Math.max(0, Math.trunc(amount));
+    const toSurah = startSurah;
+    const toAyah = startAyah;
+    if (amt === 0) {
+      return {
+        fromSurah: startSurah,
+        fromAyah: 1,
+        toSurah,
+        toAyah,
+        count: 0,
+        isCompleted: false,
+      };
+    }
+    let fromSurah = startSurah - (amt - 1);
+    if (fromSurah < 1) fromSurah = 1;
+    const fromAyah = 1;
+    const isCompleted = (fromSurah === 1);
+    const count = countAyahs(fromSurah, fromAyah, toSurah, toAyah);
+    return {
+      fromSurah,
+      fromAyah,
+      toSurah,
+      toAyah,
+      count,
+      isCompleted,
+    };
+  }
+
+  /**
+   * Build a range covering one mushaf page ending at `startPage`, going
+   * backward.
+   *
+   * Optional `upToSurah`/`upToAyah`: clip the END of the range to this
+   * position when it lies strictly BEFORE the page's natural end. This
+   * mirrors backward surah mode, which clips to the plan pointer — a
+   * user whose pointer sits mid-page gets the partial page from its
+   * start up to (and including) their position.
+   */
+  function calculatePreviousPageRange(startPage, upToSurah, upToAyah) {
+    if (!Number.isInteger(startPage) || startPage < 1 || startPage > TOTAL_PAGES) return null;
+    const cached = (typeof PageIndex !== 'undefined') ? PageIndex.getCached() : null;
+    if (!cached || !cached.pageRanges.has(startPage)) return null;
+    const r = cached.pageRanges.get(startPage);
+    let toSurah = r.toSurah;
+    let toAyah = r.toAyah;
+    // Clip only if the pointer is a valid position strictly inside this
+    // page's range (>= from, < to).
+    if (Number.isInteger(upToSurah) && Number.isInteger(upToAyah)
+        && isValidAyah(upToSurah, upToAyah)) {
+      const withinFrom = (upToSurah > r.fromSurah)
+        || (upToSurah === r.fromSurah && upToAyah >= r.fromAyah);
+      const beforeTo = (upToSurah < r.toSurah)
+        || (upToSurah === r.toSurah && upToAyah < r.toAyah);
+      if (withinFrom && beforeTo) {
+        toSurah = upToSurah;
+        toAyah = upToAyah;
+      }
+    }
+    const isCompleted = (r.fromSurah === 1 && r.fromAyah === 1);
+    return {
+      fromSurah: r.fromSurah,
+      fromAyah: r.fromAyah,
+      toSurah,
+      toAyah,
+      count: countAyahs(r.fromSurah, r.fromAyah, toSurah, toAyah),
+      isCompleted,
+    };
+  }
+
   // Local helper: count ayahs from (a,b) to (c,d) by walking forward.
   function countAyahs(fromSurah, fromAyah, toSurah, toAyah) {
     if (fromSurah === toSurah) return toAyah - fromAyah + 1;
@@ -248,9 +394,13 @@ const QuranMetaService = (() => {
     getSurahAyahCount,
     validatePosition,
     getNextPosition,
+    getPreviousPosition,
     calculateNextAyahRange,
     calculateNextSurahRange,
     calculateNextPageRange,
+    calculatePreviousAyahRange,
+    calculatePreviousSurahRange,
+    calculatePreviousPageRange,
     getPageOf,
   };
 })();
