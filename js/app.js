@@ -70,7 +70,7 @@ const App = (() => {
   /**
    * Continue with normal app initialization
    */
-  function continueInit() {
+  async function continueInit() {
     // 1. Initialize settings & customization values
     SettingsManager.init();
 
@@ -79,6 +79,17 @@ const App = (() => {
 
     // 3. Initialize Surah List Index
     SurahIndex.init();
+
+    // 3b. Initialize Memorization view (loads persisted state from IndexedDB,
+    //     warms caches). MUST be awaited before setupRouter() so the initial
+    //     route handler can call MemorizationView.render() with state loaded.
+    if (typeof MemorizationView !== 'undefined') {
+      try {
+        await MemorizationView.init();
+      } catch (e) {
+        console.error('MemorizationView.init failed:', e);
+      }
+    }
 
     // 4. Setup SPA router
     setupRouter();
@@ -96,6 +107,7 @@ const App = (() => {
       const indexSection = document.getElementById('surah-index-section');
       const readerSection = document.getElementById('surah-reader-section');
       const rulesSection = document.getElementById('tajweed-rules-section');
+      const memorizationSection = document.getElementById('memorization-section');
       const helpSection = document.getElementById('help-section');
 
       // Match pattern: #surah/(\d+)
@@ -105,6 +117,7 @@ const App = (() => {
       indexSection.classList.remove('active');
       readerSection.classList.remove('active');
       rulesSection?.classList.remove('active');
+      memorizationSection?.classList.remove('active');
       helpSection?.classList.remove('active');
 
       if (hash === '#tajweed') {
@@ -122,6 +135,23 @@ const App = (() => {
         } else {
           console.error('TajweedRules not loaded');
           if (rulesSection) rulesSection.innerHTML = '<div style="padding:2rem;color:red;">TajweedRules not loaded</div>';
+        }
+      } else if (hash === '#memorization') {
+        memorizationSection?.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        try { SurahViewer.cleanup(); } catch(e) { console.error('cleanup error:', e); }
+        if (typeof MemorizationView !== 'undefined') {
+          try {
+            MemorizationView.render();
+          } catch (e) {
+            console.error('MemorizationView.render error:', e);
+            if (memorizationSection) {
+              memorizationSection.innerHTML =
+                '<div style="padding:2rem;color:red;">' + (e && e.message ? e.message : 'render error') + '</div>';
+            }
+          }
+        } else {
+          console.error('MemorizationView not loaded');
         }
       } else if (hash === '#help') {
         // Help / Instructions page
@@ -232,6 +262,13 @@ const App = (() => {
       window.location.hash = '#tajweed';
     });
 
+    // Memorization button in dropdown (mobile)
+    const btnMemorizationDropdown = document.getElementById('btn-memorization-dropdown');
+    btnMemorizationDropdown?.addEventListener('click', () => {
+      headerDropdown?.classList.remove('open');
+      window.location.hash = '#memorization';
+    });
+
     // Help button in dropdown
     const btnHelpDropdown = document.getElementById('btn-help-dropdown');
     btnHelpDropdown?.addEventListener('click', () => {
@@ -242,6 +279,9 @@ const App = (() => {
     // Desktop header icons (always visible on desktop, hidden on mobile via CSS)
     document.getElementById('btn-tajweed-rules')?.addEventListener('click', () => {
       window.location.hash = '#tajweed';
+    });
+    document.getElementById('btn-memorization')?.addEventListener('click', () => {
+      window.location.hash = '#memorization';
     });
     document.getElementById('btn-help')?.addEventListener('click', () => {
       window.location.hash = '#help';

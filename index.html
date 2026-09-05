@@ -57,6 +57,9 @@
           <button id="btn-tajweed-rules" class="btn-icon header-desktop-icon" title="أحكام التجويد">
             <i class="fa-solid fa-book-open"></i>
           </button>
+          <button id="btn-memorization" class="btn-icon header-desktop-icon" title="الحفظ والمراجعة">
+            <i class="fa-solid fa-graduation-cap"></i>
+          </button>
           <button id="btn-help" class="btn-icon header-desktop-icon" title="التعليمات">
             <i class="fa-solid fa-circle-info"></i>
           </button>
@@ -77,6 +80,10 @@
       <button class="dropdown-item" id="btn-tajweed-rules-dropdown" role="menuitem">
         <i class="fa-solid fa-book-open"></i>
         <span>أحكام التجويد</span>
+      </button>
+      <button class="dropdown-item" id="btn-memorization-dropdown" role="menuitem">
+        <i class="fa-solid fa-graduation-cap"></i>
+        <span>الحفظ والمراجعة</span>
       </button>
       <button class="dropdown-item" id="btn-help-dropdown" role="menuitem">
         <i class="fa-solid fa-circle-info"></i>
@@ -177,6 +184,11 @@
         <div class="tajweed-rules-container" id="tajweed-rules-container">
           <!-- Rules content generated dynamically -->
         </div>
+      </section>
+
+      <!-- Memorization / Spaced Repetition View -->
+      <section id="memorization-section" class="view-section">
+        <div id="memorization-content-container" class="memorization-content-container"></div>
       </section>
 
       <!-- Help / Instructions View -->
@@ -715,6 +727,13 @@
   <script src="js/tajweedRules.js"></script>
   <script src="js/audioPlayer.js"></script>
   <script src="js/firstRunWizard.js"></script>
+  <script src="js/dateUtils.js"></script>
+  <script src="js/pageIndex.js"></script>
+  <script src="js/quranMetaService.js"></script>
+  <script src="js/memorizationEngine.js"></script>
+  <script src="js/indexedDbAdapter.js"></script>
+  <script src="js/backupValidator.js"></script>
+  <script src="js/memorizationView.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -55,6 +55,16 @@ A modern, interactive Quran reader with **Tajweed color coding**, audio playback
 - **Tajweed Color Customizer** - Full color picker for all 17 rules
 - **Reset to Defaults** - One-click reset to standard colors
 
+### Memorization (Hifz) & Spaced Repetition
+- **Full Hifz Planner** - Plan by ayahs, surahs, or pages per day with forward/backward direction
+- **Spaced-Repetition Engine** - SM-2–inspired scheduling with learning/reviewing/consolidating/stable/mastered stages
+- **Daily Frozen Cohort** - Today's review list is fixed at first render; no duplicate submissions
+- **Progress Dashboard** - Total memorized ayahs, completed juz, badges, and streak statistics
+- **Backup & Restore** - Export/import full memorization state as JSON with schema validation (V3)
+- **Full Rollback Safety** - Failed persistence reverts in-memory state (no phantom progress)
+- **Cross-Tab Sync** - State changes propagate between open tabs instantly
+- See `docs/memorization_system.md` for the full system design
+
 ### Responsive Design
 - **Mobile** (< 768px) - Optimized touch interface
 - **Tablet** (768px - 1100px) - Balanced layout
@@ -73,11 +83,19 @@ quran.com/
 │   ├── api.js              # Quran.com API client with IndexedDB-first reads
 │   ├── app.js              # SPA router and lifecycle controller
 │   ├── audioPlayer.js      # Audio player component
+│   ├── backupValidator.js  # Backup schema validation & normalization
 │   ├── clipboard.js        # Verse clipboard utilities (copy, toast, Arabic digits)
 │   ├── dataStore.js        # IndexedDB storage layer
 │   ├── dataImporter.js     # Bulk data import from API to IndexedDB
+│   ├── dateUtils.js        # Local-calendar date helpers
 │   ├── firstRunWizard.js   # First-launch import wizard UI
+│   ├── indexedDbAdapter.js # Memorization persistence adapter (quran_memorization_db)
+│   ├── memorizationEngine.js  # Spaced-repetition engine (stateless, pure functions)
+│   ├── memorizationView.js    # Memorization dashboard UI
+│   ├── pageIndex.js        # Ayah ↔ page index built from imported verses
 │   ├── pageRenderer.js     # Tajweed text processing & rendering
+│   ├── quranMetaService.js # Surah/ayah position math service
+│   ├── search.js           # Verse search
 │   ├── settings.js         # Settings & color customizer manager
 │   ├── surahIndex.js       # Surah index/grid component
 │   ├── surahView.js        # Surah reader/viewer component
@@ -87,7 +105,7 @@ quran.com/
 ├── fonts/
 │   ├── UthmanicHafs_V20.ttf
 │   └── UthmanicHafs_V22.ttf
-└── docs/                   # Project documentation
+└── docs/                   # Project documentation (memorization system, reviews)
 ```
 
 ---
@@ -111,12 +129,21 @@ Each component is implemented as a **Revealing Module Pattern** (IIFE) exposing 
 | `AudioPlayer` | Audio playback (EveryAyah.com, multiple reciters), play modes, progress tracking |
 | `VerseClipboard` | Verse copying utilities (Arabic digits, clipboard fallback, toast notifications) |
 | `TajweedRules` | Rules reference page rendering |
+| `Search` | Verse search across the Quran text |
+| `MemorizationEngine` | Spaced-repetition scheduling, plan math, statistics (stateless) |
+| `MemorizationView` | Memorization dashboard, plan editor, backup/restore UI |
+| `IndexedDbAdapter` | Persistence adapter for memorization state |
+| `BackupValidator` | Backup schema validation/migration (V1–V3) |
+| `QuranMetaService` | Surah/ayah position math, juz/page mapping |
+| `PageIndex` | Builds the mushaf page ↔ ayah index from imported verses |
+| `DateUtils` | Local-calendar date arithmetic |
 
 ### SPA Routing
-Hash-based routing with three views:
+Hash-based routing with four views:
 - `#` or empty → Surah Index
 - `#surah/{id}` → Surah Reader (1-114)
 - `#tajweed` → Tajweed Rules Reference
+- `#memorization` → Memorization Dashboard
 
 ### Data Flow
 ```

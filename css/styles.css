@@ -3290,3 +3290,878 @@ body.swipe-active .surah-content-container {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+
+/* ==========================================================================
+   Memorization & Spaced Repetition Dashboard
+   ========================================================================== */
+.memorization-content-container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 1rem 0 3rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.memorization-header {
+  text-align: center;
+  padding: 2rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.memorization-header-icon {
+  font-size: 2.4rem;
+  color: var(--accent);
+  margin-bottom: 0.6rem;
+  display: block;
+}
+
+.memorization-header h2 {
+  font-family: var(--font-arabic-ui);
+  font-size: 1.7rem;
+  color: var(--text-main);
+  margin: 0 0 0.4rem;
+}
+
+.memorization-header p {
+  font-family: var(--font-arabic-ui);
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.memorization-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 1.4rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.memorization-card:hover {
+  border-color: var(--border-gold);
+}
+
+.memorization-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-arabic-ui);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.6rem;
+}
+
+.memorization-card-title i {
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+.memorization-card-counter {
+  margin-inline-start: auto;
+  background: var(--accent-light);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.memorization-card-sub {
+  font-family: var(--font-arabic-ui);
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.7;
+  margin: 0 0 0.9rem;
+}
+
+.memorization-subhead {
+  font-family: var(--font-arabic-ui);
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  margin: 1.1rem 0 0.6rem;
+  font-weight: 600;
+}
+
+.memorization-field-label {
+  display: block;
+  font-family: var(--font-arabic-ui);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.memorization-btn {
+  font-family: var(--font-arabic-ui);
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.6rem 1.1rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all var(--transition-fast);
+  background: transparent;
+  color: var(--text-main);
+}
+
+.memorization-btn i {
+  font-size: 0.9rem;
+}
+
+.memorization-btn:hover {
+  transform: translateY(-1px);
+}
+
+.memorization-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.memorization-btn-primary {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
+}
+
+.memorization-btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: 0 4px 14px rgba(212, 175, 55, 0.3);
+}
+
+.memorization-btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+.memorization-btn-ghost:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.memorization-btn-label {
+  cursor: pointer;
+}
+
+.memorization-btn-link {
+  font-family: var(--font-arabic-ui);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  transition: all var(--transition-fast);
+}
+
+.memorization-btn-link:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+/* Plan card ----------------------------------------------------- */
+.memorization-plan-amount {
+  margin-bottom: 1rem;
+}
+
+.memorization-amount-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.memorization-amount-option {
+  font-family: var(--font-arabic-ui);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.memorization-amount-option:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.memorization-amount-option.active {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
+}
+
+.memorization-plan-info {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.memorization-plan-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0;
+  font-family: var(--font-arabic-ui);
+  font-size: 0.95rem;
+}
+
+.memorization-plan-info-row + .memorization-plan-info-row {
+  border-top: 1px solid var(--border-color);
+}
+
+.memorization-info-label {
+  color: var(--text-muted);
+}
+
+.memorization-info-value {
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.memorization-plan-completed .memorization-card-title i {
+  color: #169777;
+}
+
+/* Range display ------------------------------------------------ */
+.memorization-range {
+  font-family: var(--font-arabic-ui);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.9rem;
+  text-align: center;
+}
+
+.memorization-range-primary {
+  border-color: var(--border-gold);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+.memorization-new-done-note {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.7rem 1rem;
+  background: rgba(22, 151, 119, 0.12);
+  border: 1px solid rgba(22, 151, 119, 0.35);
+  border-radius: 10px;
+  color: #169777;
+  font-family: var(--font-arabic-ui);
+  font-size: 0.95rem;
+}
+
+body.light-theme .memorization-new-done-note {
+  background: rgba(22, 151, 119, 0.08);
+  color: #0f7e62;
+}
+
+.memorization-new-done-note i {
+  font-size: 1rem;
+}
+
+.memorization-empty-state {
+  text-align: center;
+  padding: 1.2rem 0.5rem;
+  color: var(--text-muted);
+  font-family: var(--font-arabic-ui);
+}
+
+.memorization-empty-state i {
+  font-size: 2rem;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.memorization-empty-state p {
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+/* Reviews ------------------------------------------------------- */
+.memorization-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.memorization-review-item {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.95rem 1.05rem;
+  transition: border-color var(--transition-fast);
+}
+
+.memorization-review-item:hover {
+  border-color: var(--border-gold);
+}
+
+.memorization-review-item.memorization-review-done {
+  opacity: 0.6;
+}
+
+.memorization-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+.memorization-review-range {
+  font-family: var(--font-arabic-ui);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
+.memorization-review-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.memorization-status-badge {
+  font-family: var(--font-arabic-ui);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.memorization-status-badge-large {
+  font-size: 0.85rem;
+  padding: 0.35rem 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.memorization-status-count {
+  background: var(--bg-app);
+  color: var(--text-main);
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.memorization-status-learning     { background: rgba(255, 161, 0, 0.14); color: #ffa100; border-color: rgba(255, 161, 0, 0.4); }
+.memorization-status-reviewing    { background: rgba(58, 134, 255, 0.14); color: #3a86ff; border-color: rgba(58, 134, 255, 0.4); }
+.memorization-status-consolidating{ background: rgba(0, 200, 255, 0.14); color: #00a8c8; border-color: rgba(0, 200, 255, 0.4); }
+.memorization-status-stable       { background: rgba(22, 151, 119, 0.14); color: #169777; border-color: rgba(22, 151, 119, 0.4); }
+.memorization-status-mastered     { background: rgba(212, 175, 55, 0.18); color: var(--accent); border-color: var(--border-gold); }
+
+body.light-theme .memorization-status-learning     { background: rgba(255, 161, 0, 0.12); color: #b06800; border-color: rgba(255, 161, 0, 0.35); }
+body.light-theme .memorization-status-reviewing    { background: rgba(58, 134, 255, 0.10); color: #1f5dbf; border-color: rgba(58, 134, 255, 0.35); }
+body.light-theme .memorization-status-consolidating{ background: rgba(0, 200, 255, 0.10); color: #02738a; border-color: rgba(0, 200, 255, 0.35); }
+body.light-theme .memorization-status-stable       { background: rgba(22, 151, 119, 0.10); color: #0f7e62; border-color: rgba(22, 151, 119, 0.35); }
+body.light-theme .memorization-status-mastered     { background: rgba(176, 142, 40, 0.12); color: var(--accent); border-color: var(--border-gold); }
+
+/* Rating buttons ----------------------------------------------- */
+.memorization-rating-group,
+.rating-btn-group {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.memorization-rating-btn {
+  font-family: var(--font-arabic-ui);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 10px;
+  padding: 0.55rem 0.4rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  font-weight: 700;
+  transition: all var(--transition-fast);
+}
+
+.memorization-rating-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.memorization-rating-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.memorization-rating-num {
+  font-size: 1rem;
+}
+
+.memorization-rating-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.memorization-rating-fail:hover:not(:disabled)  { border-color: #d9534f; color: #d9534f; background: rgba(217, 83, 79, 0.1); }
+.memorization-rating-hard:hover:not(:disabled)  { border-color: #e08e0b; color: #e08e0b; background: rgba(224, 142, 11, 0.1); }
+.memorization-rating-good:hover:not(:disabled)  { border-color: #169777; color: #169777; background: rgba(22, 151, 119, 0.1); }
+.memorization-rating-easy:hover:not(:disabled)  { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+/* Backlog alert ------------------------------------------------ */
+.memorization-backlog-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.35);
+  border-radius: 12px;
+  padding: 0.7rem 1rem;
+  color: #ffc107;
+  font-family: var(--font-arabic-ui);
+  font-size: 0.9rem;
+}
+
+body.light-theme .memorization-backlog-alert {
+  background: rgba(255, 193, 7, 0.12);
+  color: #a07000;
+}
+
+.memorization-backlog-alert i {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Stats grid --------------------------------------------------- */
+.memorization-stats-grid,
+.stats-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.memorization-stat-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.memorization-stat-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.memorization-stat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.memorization-stat-label {
+  font-family: var(--font-arabic-ui);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.memorization-stat-value {
+  font-family: var(--font-arabic-ui);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.1;
+}
+
+.memorization-stat-sub {
+  font-family: var(--font-arabic-ui);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.memorization-stats-statuses {
+  margin-top: 1rem;
+}
+
+.memorization-status-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Badges ------------------------------------------------------- */
+.memorization-badges-flex,
+.badges-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.memorization-badge {
+  background: var(--bg-input);
+  border: 1px solid var(--border-gold);
+  border-radius: 12px;
+  padding: 0.7rem 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 140px;
+}
+
+.memorization-badge-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.memorization-badge-label {
+  font-family: var(--font-arabic-ui);
+  font-size: 0.85rem;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+/* Backup ------------------------------------------------------- */
+.memorization-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.memorization-import-feedback {
+  font-family: var(--font-arabic-ui);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  min-height: 1.2em;
+}
+
+.memorization-import-feedback.error {
+  color: #d9534f;
+}
+
+.memorization-import-feedback.success {
+  color: #169777;
+}
+
+.memorization-danger-card {
+  border-color: #d9534f;
+}
+
+.memorization-btn-danger {
+  background: #d9534f;
+  color: #ffffff;
+}
+
+.memorization-btn-danger:hover {
+  background: #c9302c;
+}
+
+.memorization-btn-danger:focus {
+  outline: 2px solid #d9534f;
+  outline-offset: 2px;
+}
+
+/* Undo toast --------------------------------------------------- */
+.memorization-undo-toast,
+.undo-toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: var(--bg-drawer);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 0.6rem 1rem 0.6rem 1.2rem;
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-arabic-ui);
+  font-size: 0.92rem;
+  z-index: 950;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.memorization-undo-toast.visible,
+.undo-toast.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.memorization-undo-msg {
+  font-weight: 600;
+}
+
+.memorization-undo-countdown {
+  background: var(--accent-light);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  min-width: 1.6rem;
+  text-align: center;
+}
+
+.memorization-undo-btn {
+  font-family: var(--font-arabic-ui);
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.85rem;
+  transition: background var(--transition-fast);
+}
+
+.memorization-undo-btn:hover {
+  background: var(--accent-hover);
+}
+
+.memorization-flash-toast {
+  bottom: 32px;
+  z-index: 900;
+}
+
+/* Responsive --------------------------------------------------- */
+@media (max-width: 768px) {
+  .memorization-content-container {
+    padding: 0.5rem 0 2rem 0;
+  }
+  .memorization-header {
+    padding: 1.4rem 1rem;
+  }
+  .memorization-header h2 {
+    font-size: 1.35rem;
+  }
+  .memorization-card {
+    padding: 1.1rem 1.1rem;
+  }
+  .memorization-amount-options {
+    flex-wrap: wrap;
+  }
+  .memorization-review-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .memorization-stat-card {
+    padding: 0.85rem 0.95rem;
+  }
+  .memorization-stat-value {
+    font-size: 1.25rem;
+  }
+  .memorization-undo-toast,
+  .undo-toast {
+    bottom: 24px;
+    left: 12px;
+    right: 12px;
+    transform: translateY(20px);
+    max-width: none;
+    justify-content: space-between;
+  }
+  .memorization-undo-toast.visible,
+  .undo-toast.visible {
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .memorization-rating-group,
+  .rating-btn-group {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .memorization-plan-info-row {
+    font-size: 0.85rem;
+  }
+  .memorization-backup-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .memorization-backup-actions .memorization-btn {
+    justify-content: center;
+  }
+}
+
+/* Plan editor modal */
+.plan-editor-modal {
+  border: none;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  max-width: 420px;
+  width: 92vw;
+  background: var(--bg-card, #ffffff);
+  color: var(--text-primary, #222222);
+  direction: rtl;
+}
+.plan-editor-modal::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+.plan-editor-title {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.plan-editor-row {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.plan-editor-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.plan-editor-mode-segmented {
+  display: flex;
+  gap: 0.4rem;
+}
+.plan-editor-mode-btn,
+.plan-editor-dir-btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 8px;
+  background: var(--bg-input, #f7f7f7);
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+.plan-editor-mode-btn.active,
+.plan-editor-dir-btn.active {
+  background: var(--accent, #2563eb);
+  color: #fff;
+  border-color: var(--accent, #2563eb);
+}
+.plan-editor-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.plan-editor-stepper-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #d0d0d0);
+  background: var(--bg-input, #f7f7f7);
+  font-size: 1.3rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.plan-editor-stepper-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.plan-editor-stepper-input {
+  width: 5rem;
+  text-align: center;
+  font-size: 1.1rem;
+  padding: 0.4rem;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 8px;
+  background: var(--bg-input, #ffffff);
+  color: inherit;
+  font-family: inherit;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.plan-editor-stepper-input::-webkit-outer-spin-button,
+.plan-editor-stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.plan-editor-select,
+.plan-editor-ayah-input {
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 8px;
+  background: var(--bg-input, #ffffff);
+  color: inherit;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.plan-editor-ayah-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.plan-editor-ayah-row .plan-editor-ayah-input {
+  flex: 0 0 6rem;
+}
+.plan-editor-ayah-hint {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+.plan-editor-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+[dir="rtl"] .plan-editor-actions {
+  justify-content: flex-start;
+}
+.memorization-plan-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .plan-editor-modal {
+    background: #1f2937;
+    color: #f3f4f6;
+  }
+  .plan-editor-mode-btn,
+  .plan-editor-dir-btn,
+  .plan-editor-stepper-btn,
+  .plan-editor-stepper-input,
+  .plan-editor-select,
+  .plan-editor-ayah-input {
+    background: #374151;
+    color: #f3f4f6;
+    border-color: #4b5563;
+  }
+}
