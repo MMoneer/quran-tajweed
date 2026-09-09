@@ -13,14 +13,14 @@ A modern, interactive Quran reader with **Tajweed color coding**, audio playback
 
 ### Quran Reading
 - **Full Quran Text** - All 114 Surahs with Uthmani script
-- **Tajweed Color Coding** - 17+ Tajweed rules color-coded for easy learning
+- **Tajweed Color Coding** - 18 Tajweed rules color-coded for easy learning
 - **Page-based Navigation** - Navigate by page (1-604) matching the physical Mushaf
 - **Juz Navigation** - Jump to any of the 30 Juz (parts)
 - **Surah Index** - Searchable grid with Arabic/English names and metadata
 
 ### Tajweed Rules
-- **17 Tajweed Rules** with color indicators:
-  - **Madd (Elongation)**: Normal, Permissible, Obligatory, Necessary
+- **18 Tajweed Rules** with color indicators:
+  - **Madd (Elongation)**: Normal, Permissible, Obligatory, Obligatory Separated (Monfasel), Necessary
   - **Noon/Meem Sakinah**: Ghunnah, Ikhfa, Ikhfa Shafawi, Idgham with/without Ghunnah, Iqlab
   - **Pronunciation**: Qalqalah, Tafkhim, Laam Shamsiyah, Hamzat Wasl, Silent Letters
 - **Interactive Color Customizer** - Change any rule's color in real-time
@@ -52,13 +52,14 @@ A modern, interactive Quran reader with **Tajweed color coding**, audio playback
 ### Customization
 - **Dark/Light Theme** - Toggle between themes
 - **Font Size Adjustment** - Responsive sizing (20px-60px) with per-device defaults
-- **Tajweed Color Customizer** - Full color picker for all 17 rules
+- **Tajweed Color Customizer** - Full color picker for all 18 rules
 - **Reset to Defaults** - One-click reset to standard colors
 
 ### Memorization (Hifz) & Spaced Repetition
 - **Full Hifz Planner** - Plan by ayahs, surahs, or pages per day with forward/backward direction
 - **Spaced-Repetition Engine** - SM-2–inspired scheduling with learning/reviewing/consolidating/stable/mastered stages
 - **Daily Frozen Cohort** - Today's review list is fixed at first render; no duplicate submissions
+- **Configurable Review Cap** - Daily review limit multiplier (default ×3); effective daily reviews = daily amount × review cap
 - **Progress Dashboard** - Total memorized ayahs, completed juz, badges, and streak statistics
 - **Backup & Restore** - Export/import full memorization state as JSON with schema validation (V3)
 - **Full Rollback Safety** - Failed persistence reverts in-memory state (no phantom progress)
@@ -139,11 +140,12 @@ Each component is implemented as a **Revealing Module Pattern** (IIFE) exposing 
 | `DateUtils` | Local-calendar date arithmetic |
 
 ### SPA Routing
-Hash-based routing with four views:
+Hash-based routing with five views:
 - `#` or empty → Surah Index
 - `#surah/{id}` → Surah Reader (1-114)
 - `#tajweed` → Tajweed Rules Reference
 - `#memorization` → Memorization Dashboard
+- `#help` → Help / Instructions (Arabic user guide)
 
 ### Data Flow
 ```
@@ -246,6 +248,7 @@ After first launch, follow the import wizard to download all 114 surahs. Quran t
 | `madda-normal` | مد طبيعي | Pink | Natural elongation (2 counts) |
 | `madda-permissible` | مد جائز | Orange | Permissible elongation (2/4/6 counts) |
 | `madda-obligatory` | مد واجب متصل | Hot Pink | Obligatory connected elongation (4-5 counts) |
+| `madda-obligatory-monfasel` | مد جائز منفصل | Orange | Separated permissible elongation (4-5 counts) |
 | `madda-necessary` | مد لازم | Red | Necessary elongation (6 counts) |
 | `ghunnah` | غنة | Green | Nasalization sound |
 | `ikhafa` | إخفاء | Green | Concealment with nasalization |
