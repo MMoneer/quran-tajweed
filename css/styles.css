@@ -1782,6 +1782,18 @@ body.light-theme .juz-divider-label {
   color: var(--text-main);
 }
 
+/* Hizb starts stand out in the juz/hizb/quarter list (desktop popups;
+   mobile native pickers ignore per-option styling) */
+.part-input-wrapper select option.hizb-start {
+  background: var(--accent-light);
+  font-weight: 700;
+}
+
+.part-input-wrapper select optgroup {
+  color: var(--accent);
+  font-style: normal;
+}
+
 /* Font Size Controls - Header Style */
 .nav-group-font .reader-adjustments {
   background: var(--bg-input);

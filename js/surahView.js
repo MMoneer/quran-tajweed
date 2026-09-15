@@ -228,29 +228,72 @@ const SurahViewer = (() => {
   }
 
   /**
-    * Find surah ID for a given part number
+    * Mushaf label for a hizb-quarter entry, e.g. "الحزب 5"، "ربع الحزب 5"،
+    * "نصف الحزب 5"، "ثلاثة أرباع الحزب 5".
+    */
+  function hizbQuarterLabel(entry) {
+    const pos = ((entry.rub - 1) % 4) + 1;
+    if (pos === 1) return `الحزب ${entry.hizb}`;
+    if (pos === 2) return `ربع الحزب ${entry.hizb}`;
+    if (pos === 3) return `نصف الحزب ${entry.hizb}`;
+    return `ثلاثة أرباع الحزب ${entry.hizb}`;
+  }
+
+  /**
+    * Find surah ID for a given rub (quarter) number 1..240.
+    * Falls back to juz lookup when the quarter table is unavailable.
     */
   function findSurahForPart(partNumber) {
-    const juzInfo = JUZ_DATA.find(j => j.juz === partNumber);
+    const rub = parseInt(partNumber);
+    if (!isNaN(rub) && typeof HIZB_QUARTER_DATA !== 'undefined') {
+      const entry = HIZB_QUARTER_DATA.find(e => e.rub === rub);
+      if (entry) return entry.surah;
+    }
+    const juzInfo = (typeof JUZ_DATA !== 'undefined')
+      ? JUZ_DATA.find(j => j.juz === parseInt(partNumber))
+      : null;
     if (!juzInfo) return currentSurahId;
     return juzInfo.surah;
   }
 
   /**
-    * Populate part selector dropdown
+    * Populate part selector dropdown: one optgroup per juz (30 groups),
+    * each holding its 8 quarters with the ayah preview, e.g.
+    * "ما ننسخ من اية… — نصف الحزب 2 · البقرة 106 · ص 17".
     */
   function populatePartSelector() {
     const select = document.getElementById('part-number-select');
     if (!select) return;
-    
+
     // Check if already populated
     if (select.options.length > 1) return;
-    
-    for (let i = 1; i <= 30; i++) {
-      const option = document.createElement('option');
-      option.value = i;
-      option.textContent = `الجزء ${i}`;
-      select.appendChild(option);
+
+    if (typeof HIZB_QUARTER_DATA === 'undefined' || !Array.isArray(HIZB_QUARTER_DATA)) {
+      for (let i = 1; i <= 30; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `الجزء ${i}`;
+        select.appendChild(option);
+      }
+      return;
+    }
+
+    for (let juz = 1; juz <= 30; juz++) {
+      const group = document.createElement('optgroup');
+      group.label = `الجزء ${juz}`;
+      HIZB_QUARTER_DATA
+        .filter(e => e.juz === juz)
+        .forEach(entry => {
+          const option = document.createElement('option');
+          option.value = entry.rub;
+          // Hizb starts (first quarter of each hizb) get a distinct
+          // background on desktop; mobile native pickers ignore it.
+          if (((entry.rub - 1) % 4) === 0) option.className = 'hizb-start';
+          option.textContent =
+            `${entry.preview}… — ${hizbQuarterLabel(entry)} · ${entry.surahName} ${entry.ayah} · ص ${entry.page}`;
+          group.appendChild(option);
+        });
+      select.appendChild(group);
     }
   }
 
@@ -276,22 +319,28 @@ const SurahViewer = (() => {
   }
 
   /**
-    * Navigate to a specific part
+    * Navigate to a specific hizb quarter (rub 1..240).
+    * Falls back to juz navigation when the quarter table is unavailable.
     */
   function goToPart(partNumber) {
     partNumber = parseInt(partNumber);
-    if (isNaN(partNumber) || partNumber < 1 || partNumber > 30) return;
-    
-    const juzInfo = JUZ_DATA.find(j => j.juz === partNumber);
-    if (!juzInfo) return;
+    if (isNaN(partNumber)) return;
 
-    if (juzInfo.surah === currentSurahId) {
-      scrollToAyah(juzInfo.ayah);
+    let target = null;
+    if (typeof HIZB_QUARTER_DATA !== 'undefined' && partNumber >= 1 && partNumber <= 240) {
+      target = HIZB_QUARTER_DATA.find(e => e.rub === partNumber) || null;
+    } else if (typeof JUZ_DATA !== 'undefined' && partNumber >= 1 && partNumber <= 30) {
+      target = JUZ_DATA.find(j => j.juz === partNumber) || null;
+    }
+    if (!target) return;
+
+    if (target.surah === currentSurahId) {
+      scrollToAyah(target.ayah);
     } else {
-      window._pendingAyahScroll = juzInfo.ayah;
-      const targetHash = `#surah/${juzInfo.surah}`;
+      window._pendingAyahScroll = target.ayah;
+      const targetHash = `#surah/${target.surah}`;
       if (window.location.hash === targetHash) {
-        loadSurah(juzInfo.surah);
+        loadSurah(target.surah);
       } else {
         window.location.hash = targetHash;
       }

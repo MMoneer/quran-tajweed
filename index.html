@@ -123,10 +123,10 @@
 
         <!-- Part Navigation -->
         <div class="nav-group nav-group-part">
-          <label for="part-number-select">انتقل للجزء:</label>
+          <label for="part-number-select">الأجزاء:</label>
           <div class="part-input-wrapper">
             <select id="part-number-select">
-              <option value="">الجزء</option>
+              <option value="">اختر…</option>
             </select>
             <button id="btn-go-part" class="btn-icon-small" title="اذهب"><i class="fa-solid fa-arrow-left"></i></button>
           </div>
@@ -221,7 +221,7 @@
               <ul>
                 <li><strong>أزرار السورة:</strong> زر <i class="fa-solid fa-chevron-right"></i> للسورة السابقة و <i class="fa-solid fa-chevron-left"></i> للسورة التالية.</li>
                 <li><strong>رقم الصفحة:</strong> اكتب رقم الصفحة (1-604) واضغط <i class="fa-solid fa-arrow-left"></i> للانتقال إليها مباشرة.</li>
-                <li><strong>الجزء:</strong> اختر رقم الجزء (1-30) من القائمة المنسدلة واضغط <i class="fa-solid fa-arrow-left"></i> للانتقال.</li>
+                <li><strong>الجزء / الحزب / الربع:</strong> اختر الجزء ثم الحزب أو الربع (240 موضعاً مع أول الآية) من القائمة المنسدلة واضغط <i class="fa-solid fa-arrow-left"></i> للانتقال.</li>
                 <li><strong>حجم الخط:</strong> زر <i class="fa-solid fa-plus"></i> لتكبير الخط و <i class="fa-solid fa-minus"></i> لتصغيره.</li>
               </ul>
             </div>
@@ -794,6 +794,7 @@
 
   <!-- App scripts -->
   <script src="data/juz-data.js"></script>
+  <script src="js/hizbQuarterData.js"></script>
   <script src="js/dataStore.js"></script>
   <script src="js/dataImporter.js"></script>
   <script src="js/api.js"></script>
