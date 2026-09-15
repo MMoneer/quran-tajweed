@@ -256,45 +256,122 @@ const SurahViewer = (() => {
     return juzInfo.surah;
   }
 
+  let selectedPartRub = null;
+
   /**
-    * Populate part selector dropdown: one optgroup per juz (30 groups),
-    * each holding its 8 quarters with the ayah preview, e.g.
-    * "ما ننسخ من اية… — نصف الحزب 2 · البقرة 106 · ص 17".
+    * Populate the custom part dropdown: one sticky group per juz
+    * (30 groups), each holding its 8 quarters as two-line items:
+    * preview line + muted label line (like the reference app).
     */
   function populatePartSelector() {
-    const select = document.getElementById('part-number-select');
-    if (!select) return;
+    const list = document.getElementById('part-dropdown-list');
+    if (!list || list.childElementCount > 0) return;
 
-    // Check if already populated
-    if (select.options.length > 1) return;
+    const frag = document.createDocumentFragment();
+    const hasQuarters = typeof HIZB_QUARTER_DATA !== 'undefined'
+      && Array.isArray(HIZB_QUARTER_DATA);
 
-    if (typeof HIZB_QUARTER_DATA === 'undefined' || !Array.isArray(HIZB_QUARTER_DATA)) {
-      for (let i = 1; i <= 30; i++) {
-        const option = document.createElement('option');
-        option.value = i;
-        option.textContent = `الجزء ${i}`;
-        select.appendChild(option);
+    if (hasQuarters) {
+      for (let juz = 1; juz <= 30; juz++) {
+        const header = document.createElement('div');
+        header.className = 'part-group-title';
+        header.textContent = `الجزء ${juz}`;
+        frag.appendChild(header);
+
+        HIZB_QUARTER_DATA
+          .filter(e => e.juz === juz)
+          .forEach(entry => {
+            const label = hizbQuarterLabel(entry);
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'part-item'
+              + ((((entry.rub - 1) % 4) === 0) ? ' hizb-start' : '');
+            item.setAttribute('role', 'option');
+            item.dataset.rub = entry.rub;
+            item.dataset.short = `${label} · ${entry.surahName} ${entry.ayah}`;
+            item.innerHTML =
+              `<span class="part-item-preview">${entry.preview}…</span>` +
+              `<span class="part-item-sub">${label} · ${entry.surahName} ${entry.ayah} · ص ${entry.page}</span>`;
+            frag.appendChild(item);
+          });
       }
-      return;
+    } else if (typeof JUZ_DATA !== 'undefined') {
+      JUZ_DATA.forEach(j => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'part-item';
+        item.setAttribute('role', 'option');
+        item.dataset.rub = j.juz;
+        item.dataset.short = `الجزء ${j.juz}`;
+        item.innerHTML =
+          `<span class="part-item-preview">الجزء ${j.juz}</span>` +
+          `<span class="part-item-sub">صفحة ${j.page}</span>`;
+        frag.appendChild(item);
+      });
     }
 
-    for (let juz = 1; juz <= 30; juz++) {
-      const group = document.createElement('optgroup');
-      group.label = `الجزء ${juz}`;
-      HIZB_QUARTER_DATA
-        .filter(e => e.juz === juz)
-        .forEach(entry => {
-          const option = document.createElement('option');
-          option.value = entry.rub;
-          // Hizb starts (first quarter of each hizb) get a distinct
-          // background on desktop; mobile native pickers ignore it.
-          if (((entry.rub - 1) % 4) === 0) option.className = 'hizb-start';
-          option.textContent =
-            `${entry.preview}… — ${hizbQuarterLabel(entry)} · ${entry.surahName} ${entry.ayah} · ص ${entry.page}`;
-          group.appendChild(option);
-        });
-      select.appendChild(group);
-    }
+    list.appendChild(frag);
+  }
+
+  /**
+    * Wire the custom part dropdown open/close/selection (once only).
+    * Desktop: panel floats under the button. Mobile: panel is fixed
+    * and centered (native pickers can't be styled, so we render our own).
+    */
+  function setupPartDropdown() {
+    if (window._partDropdownSetup) return;
+    window._partDropdownSetup = true;
+
+    const root = document.getElementById('part-dropdown');
+    const btn = document.getElementById('part-dropdown-btn');
+    const panel = document.getElementById('part-dropdown-panel');
+    const label = document.getElementById('part-dropdown-label');
+    if (!root || !btn || !panel || !label) return;
+
+    const close = () => {
+      panel.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+    };
+
+    const open = () => {
+      populatePartSelector();
+      panel.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+      if (window.innerWidth <= 900) {
+        const rect = btn.getBoundingClientRect();
+        panel.style.top = `${rect.bottom + 6}px`;
+      } else {
+        panel.style.top = '';
+      }
+      panel.querySelector('.part-item.selected')
+        ?.scrollIntoView({ block: 'nearest' });
+    };
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (panel.classList.contains('open')) close();
+      else open();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!root.contains(e.target)) close();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+
+    panel.addEventListener('click', (e) => {
+      const item = e.target.closest('.part-item');
+      if (!item) return;
+      panel.querySelectorAll('.part-item.selected')
+        .forEach(el => el.classList.remove('selected'));
+      item.classList.add('selected');
+      selectedPartRub = parseInt(item.dataset.rub);
+      label.textContent = item.dataset.short || 'اختر…';
+      close();
+      goToPart(selectedPartRub);
+    });
   }
 
   /**
@@ -809,19 +886,16 @@ const SurahViewer = (() => {
       });
     });
 
-    // Part navigation
+    // Part navigation (custom dropdown)
+    setupPartDropdown();
+
     const btnGoPart = document.getElementById('btn-go-part');
-    const partSelect = document.getElementById('part-number-select');
-    
+
     btnGoPart?.addEventListener('click', () => {
-      if (partSelect.value) {
-        goToPart(partSelect.value);
-      }
-    });
-    
-    partSelect?.addEventListener('change', () => {
-      if (partSelect.value) {
-        goToPart(partSelect.value);
+      if (selectedPartRub) {
+        goToPart(selectedPartRub);
+      } else {
+        document.getElementById('part-dropdown-btn')?.click();
       }
     });
   }

@@ -123,11 +123,17 @@
 
         <!-- Part Navigation -->
         <div class="nav-group nav-group-part">
-          <label for="part-number-select">الأجزاء:</label>
+          <label for="part-dropdown-btn">الأجزاء:</label>
           <div class="part-input-wrapper">
-            <select id="part-number-select">
-              <option value="">اختر…</option>
-            </select>
+            <div class="part-dropdown" id="part-dropdown">
+              <button id="part-dropdown-btn" class="part-dropdown-btn" aria-haspopup="listbox" aria-expanded="false">
+                <span id="part-dropdown-label">اختر…</span>
+                <i class="fa-solid fa-chevron-down part-dropdown-caret"></i>
+              </button>
+              <div id="part-dropdown-panel" class="part-dropdown-panel" role="listbox">
+                <div id="part-dropdown-list" class="part-dropdown-list"></div>
+              </div>
+            </div>
             <button id="btn-go-part" class="btn-icon-small" title="اذهب"><i class="fa-solid fa-arrow-left"></i></button>
           </div>
         </div>
