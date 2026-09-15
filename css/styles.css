@@ -1810,11 +1810,15 @@ body.light-theme .juz-divider-label {
   max-width: calc(100vw - 32px);
   max-height: min(60vh, 430px);
   overflow-y: auto;
-  background: var(--bg-card);
+  background: #161b26;
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.35));
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
   z-index: 200;
+}
+
+body.light-theme .part-dropdown-panel {
+  background: #ffffff;
 }
 
 .part-dropdown-panel.open {
@@ -1829,12 +1833,16 @@ body.light-theme .juz-divider-label {
   position: sticky;
   top: -6px;
   padding: 8px 10px 6px;
-  background: var(--bg-card);
+  background: #161b26;
   color: var(--accent);
   font-size: 12px;
   font-weight: 700;
   border-bottom: 1px solid var(--border-color);
   z-index: 1;
+}
+
+body.light-theme .part-group-title {
+  background: #ffffff;
 }
 
 .part-item {
