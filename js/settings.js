@@ -338,13 +338,17 @@ const SettingsManager = (() => {
       boundPickerIds.add(rule.id);
 
       const input = document.getElementById(`color-${rule.id}`);
-      input?.addEventListener('input', (e) => {
+      // NOTE: listen to both `input` (live drag) and `change` (picker
+      // dismiss). Chrome on Android fires only `change` when a custom
+      // color is confirmed with OK, so `input`-only binding silently
+      // drops custom picks while preset swatches still work.
+      const onPickerChange = (e) => {
         const val = e.target.value;
         state.colors[rule.id] = val;
-        
+
         // Dynamic DOM Updates
         document.documentElement.style.setProperty(`--color-${rule.id}`, val);
-        
+
         // Update local dot color
         const dot = input.closest('.rule-color-item')?.querySelector('.rule-dot');
         if (dot) {
@@ -358,7 +362,9 @@ const SettingsManager = (() => {
         }
 
         saveColorsToLocalStorage();
-      });
+      };
+      input?.addEventListener('input', onPickerChange);
+      input?.addEventListener('change', onPickerChange);
     });
 
     // Font size slider
