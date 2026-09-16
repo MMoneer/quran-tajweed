@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'quran-pwa-v18';
+const CACHE_VERSION = 'quran-pwa-v19';
 
 // GUARDRAIL: every app asset that must work offline MUST be listed here, and
 // CACHE_VERSION must be bumped whenever any of these files changes. Any new
@@ -14,6 +14,7 @@ const PRECACHE = [
   'css/google-fonts.css',
   'data/juz-data.js',
   'js/hizbQuarterData.js',
+  'js/version.js',
   'js/dataStore.js',
   'js/dataImporter.js',
   'js/api.js',

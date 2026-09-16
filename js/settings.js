@@ -190,19 +190,13 @@ const SettingsManager = (() => {
    * Initialize settings
    */
   /**
-   * Show the app version (parsed from sw.js CACHE_VERSION) in Settings.
-   * Works offline (sw.js is precached) and on file:// (shows dash).
+   * Show the user-facing release version (js/version.js) in Settings.
+   * No fetch involved, so it works offline and on file://.
    */
   function displayAppVersion() {
     const el = document.getElementById('app-version-text');
     if (!el) return;
-    fetch('./sw.js')
-      .then(r => { if (!r.ok) throw new Error('no sw'); return r.text(); })
-      .then(t => {
-        const m = t.match(/CACHE_VERSION\s*=\s*['"]quran-pwa-(v\d+)['"]/);
-        el.textContent = m ? m[1] : '—';
-      })
-      .catch(() => { el.textContent = '—'; });
+    el.textContent = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : '—';
   }
 
   function init() {
