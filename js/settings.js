@@ -536,7 +536,10 @@ const SettingsManager = (() => {
             ? 'يُثبَّت الآن وسيُطبَّق عند إعادة فتح التطبيق.'
             : 'أعد فتح التطبيق مع الإنترنت لتثبيته.'));
       } else if (remoteVer && localVer) {
-        say('لا توجد تحديثات — أنت على أحدث إصدار (' + localVer + ').');
+        // Same release, but a file-level SW update may still be installing.
+        say(workerPending
+          ? 'الإصدار (' + localVer + ') هو الأحدث — تُحدَّث الملفات الآن وستُطبَّق عند إعادة فتح التطبيق.'
+          : 'لا توجد تحديثات — أنت على أحدث إصدار (' + localVer + ').');
       } else if (fetchFailed || swError) {
         say('تعذر التحقق — تحقق من الاتصال بالإنترنت ثم أعد المحاولة.');
       } else {
