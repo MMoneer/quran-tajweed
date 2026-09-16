@@ -4511,6 +4511,13 @@ button.bookmark-row:hover,
   }
 }
 
+.app-version-text {
+  font-family: var(--font-english);
+  font-size: 13px;
+  color: var(--text-muted);
+  direction: ltr;
+}
+
 @media (prefers-color-scheme: dark) {
   .plan-editor-modal {
     background: #1f2937;

@@ -189,8 +189,25 @@ const SettingsManager = (() => {
   /**
    * Initialize settings
    */
+  /**
+   * Show the app version (parsed from sw.js CACHE_VERSION) in Settings.
+   * Works offline (sw.js is precached) and on file:// (shows dash).
+   */
+  function displayAppVersion() {
+    const el = document.getElementById('app-version-text');
+    if (!el) return;
+    fetch('./sw.js')
+      .then(r => { if (!r.ok) throw new Error('no sw'); return r.text(); })
+      .then(t => {
+        const m = t.match(/CACHE_VERSION\s*=\s*['"]quran-pwa-(v\d+)['"]/);
+        el.textContent = m ? m[1] : '—';
+      })
+      .catch(() => { el.textContent = '—'; });
+  }
+
   function init() {
     loadFromLocalStorage();
+    displayAppVersion();
     currentMedia = detectMedia();
     
     // Set fontSize based on current media
@@ -452,6 +469,36 @@ const SettingsManager = (() => {
     legendHeader?.addEventListener('click', () => {
       legend.classList.toggle('collapsed');
       updateReaderPadding();
+    });
+
+    // Check-for-updates button (PWA): forces an SW update check and
+    // applies it. No-op on file:// where no SW is registered.
+    const btnUpdates = document.getElementById('btn-check-updates');
+    const updateStatus = document.getElementById('update-status-text');
+    btnUpdates?.addEventListener('click', async () => {
+      if (!('serviceWorker' in navigator)) {
+        if (updateStatus) updateStatus.textContent = 'التحديث التلقائي غير مدعوم على هذا المتصفح.';
+        return;
+      }
+      try {
+        if (updateStatus) updateStatus.textContent = 'جاري التحقق من التحديثات...';
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) {
+          if (updateStatus) updateStatus.textContent = 'لا يوجد عامل مثبت (وضع ملف مباشر) — أنت على أحدث نسخة محلية.';
+          return;
+        }
+        await reg.update();
+        // A new worker found? Our SW calls skipWaiting() itself, so it
+        // activates on its own and the app reloads via controllerchange.
+        const pending = reg.installing || reg.waiting;
+        if (updateStatus) {
+          updateStatus.textContent = pending
+            ? 'تم العثور على تحديث — يُثبَّت الآن وسيُطبَّق عند إعادة الفتح.'
+            : 'لا توجد تحديثات — أنت على أحدث إصدار.';
+        }
+      } catch (e) {
+        if (updateStatus) updateStatus.textContent = 'تعذر التحقق — تحقق من الاتصال بالإنترنت.';
+      }
     });
 
     // Re-fetch data button
