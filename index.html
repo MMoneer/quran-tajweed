@@ -154,20 +154,61 @@
       
       <!-- Surah Index View (Active by default) -->
       <section id="surah-index-section" class="view-section active">
-        <div class="search-banner">
-          <div class="search-wrapper">
-            <i class="fa-solid fa-magnifying-glass search-icon"></i>
-            <input type="text" id="surah-search" placeholder="ابحث في القرآن الكريم... «عبارة» للبحث الدقيق">
-            <button id="clear-search" class="btn-clear"><i class="fa-solid fa-xmark"></i></button>
+        <!-- Home tabs: Surahs (default) / Bookmarks -->
+        <div class="home-tabs" role="tablist" aria-label="تبويبات الرئيسية">
+          <button id="tab-btn-surahs" class="home-tab active" role="tab" aria-selected="true" aria-controls="tab-panel-surahs">
+            <i class="fa-solid fa-list"></i>
+            <span>السور</span>
+          </button>
+          <button id="tab-btn-bookmarks" class="home-tab" role="tab" aria-selected="false" aria-controls="tab-panel-bookmarks">
+            <i class="fa-solid fa-bookmark"></i>
+            <span>المرجعيات</span>
+            <span id="bookmarks-count-badge" class="bookmarks-count-badge"></span>
+          </button>
+        </div>
+
+        <div id="tab-panel-surahs" class="home-tab-panel active" role="tabpanel" aria-labelledby="tab-btn-surahs">
+          <div class="search-banner">
+            <div class="search-wrapper">
+              <i class="fa-solid fa-magnifying-glass search-icon"></i>
+              <input type="text" id="surah-search" placeholder="ابحث في القرآن الكريم... «عبارة» للبحث الدقيق">
+              <button id="clear-search" class="btn-clear"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+
+          <div class="surah-grid-container">
+            <div class="index-loading" id="index-loading">
+              <div class="spinner"></div>
+              <p>جاري تحميل قائمة السور...</p>
+            </div>
+            <div class="surah-grid" id="surah-grid"></div>
           </div>
         </div>
-        
-        <div class="surah-grid-container">
-          <div class="index-loading" id="index-loading">
-            <div class="spinner"></div>
-            <p>جاري تحميل قائمة السور...</p>
+
+        <div id="tab-panel-bookmarks" class="home-tab-panel" role="tabpanel" aria-labelledby="tab-btn-bookmarks">
+          <div class="bookmarks-container">
+            <!-- Resume card: last surah + page -->
+            <div id="resume-card" class="resume-card empty"></div>
+
+            <!-- Automatic: last 5 pages -->
+            <div class="bookmarks-group">
+              <h3 class="bookmarks-group-title">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                آخر المواضع
+              </h3>
+              <div id="recent-pages-list" class="bookmarks-list"></div>
+            </div>
+
+            <!-- Manual: up to 10 ayahs -->
+            <div class="bookmarks-group">
+              <h3 class="bookmarks-group-title">
+                <i class="fa-solid fa-bookmark"></i>
+                مرجعياتي
+                <span id="user-bookmarks-counter" class="bookmarks-counter"></span>
+              </h3>
+              <div id="user-bookmarks-list" class="bookmarks-list"></div>
+            </div>
           </div>
-          <div class="surah-grid" id="surah-grid"></div>
         </div>
       </section>
 
@@ -821,6 +862,7 @@
   <script src="js/indexedDbAdapter.js"></script>
   <script src="js/backupValidator.js"></script>
   <script src="js/memorizationView.js"></script>
+  <script src="js/bookmarks.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

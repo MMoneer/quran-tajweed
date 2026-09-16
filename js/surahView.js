@@ -12,6 +12,9 @@ const SurahViewer = (() => {
   let suppressNextVerseClick = false;
   let pageObserver = null;
   let currentPageNumber = 1;
+  // Last actually-seen mushaf page (tracked silently; only persisted
+  // when the user LEAVES the reader — see flushReadingPosition).
+  let lastSeenPage = null;
 
   let swipeStartX = 0;
   let swipeStartY = 0;
@@ -26,6 +29,9 @@ const SurahViewer = (() => {
    * @param {number} surahId
    */
   async function loadSurah(surahId) {
+    // Switching surahs is NOT leaving the reader — keep tracking
+    // silently, just reset for the new surah.
+    lastSeenPage = null;
     currentSurahId = parseInt(surahId);
     const generation = ++loadGeneration;
     
@@ -455,9 +461,37 @@ const SurahViewer = (() => {
   }
 
   /**
+   * Persist the last seen page as a "stop" (surah + page).
+   * Called ONLY when truly leaving the reader (cleanup) or when the
+   * browser tab closes/hides — NOT when switching between surahs.
+   */
+  let lastFlushKey = null;
+  let lastFlushTime = 0;
+
+  function flushReadingPosition() {
+    try {
+      if (typeof QuranBookmarks === 'undefined') return;
+      if (!currentSurahId || lastSeenPage == null) return;
+      // Idempotent: pagehide + visibilitychange(hidden) often fire
+      // together on tab close — skip same-position repeats within 2s.
+      const key = `${currentSurahId}:${lastSeenPage}`;
+      const now = Date.now();
+      if (key === lastFlushKey && (now - lastFlushTime) < 2000) return;
+      lastFlushKey = key;
+      lastFlushTime = now;
+      QuranBookmarks.recordPageVisit(
+        currentSurahId, lastSeenPage, currentSurahData?.name_arabic || '');
+    } catch (e) { /* history is best-effort */ }
+  }
+
+  /**
     * Hide reader elements when leaving the view
     */
   function cleanup() {
+    // Leaving the reader counts as a "stop": save last seen page first
+    // (before currentSurahData is cleared below).
+    flushReadingPosition();
+    lastSeenPage = null;
     exitSelectionMode();
     currentSurahData = null;
     AudioPlayer.stop();
@@ -647,6 +681,13 @@ const SurahViewer = (() => {
     if (window._surahNavListenersSetup) return;
     window._surahNavListenersSetup = true;
 
+    // Browser/tab close (or hide on mobile): persist the stop position.
+    // localStorage writes are still allowed in the pagehide handler.
+    window.addEventListener('pagehide', flushReadingPosition);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushReadingPosition();
+    });
+
     // Reposition selection bar when audio player visibility changes
     const audioPlayerEl = document.querySelector('.audio-player');
     if (audioPlayerEl) {
@@ -739,15 +780,27 @@ const SurahViewer = (() => {
       // Update player position (without playing)
       AudioPlayer.setAyahPosition(ayahId);
 
-      // Create popup with play + copy buttons
+      // Create popup with play + copy + bookmark buttons
       const popup = document.createElement('div');
       popup.className = 'verse-play-popup';
+      // NOTE: verse.dataset.ayah holds the GLOBAL verse id (e.g. Baqarah
+      // ayah 253 === global id 260). User bookmarks store the LOCAL ayah
+      // number within the surah, so convert here. Audio/copy keep the
+      // global id, which is what they expect.
+      const ayahIdx = ayahIndexById(ayahId);
+      const localAyahNumber = ayahIdx >= 0 ? ayahIdx + 1 : null;
+      const alreadySaved = (typeof QuranBookmarks !== 'undefined') &&
+        localAyahNumber != null &&
+        QuranBookmarks.isAyahBookmarked(currentSurahId, localAyahNumber);
       popup.innerHTML = `
         <button class="verse-play-btn" title="تشغيل من هذه الآية" aria-label="تشغيل من هذه الآية">
           <i class="fa-solid fa-play"></i>
         </button>
         <button class="verse-copy-btn" title="نسخ الآية" aria-label="نسخ الآية">
           <i class="fa-regular fa-copy"></i>
+        </button>
+        <button class="verse-copy-btn verse-bookmark-btn${alreadySaved ? ' bookmarked' : ''}" title="حفظ مرجع" aria-label="حفظ مرجع">
+          <i class="fa-${alreadySaved ? 'solid' : 'regular'} fa-bookmark"></i>
         </button>
       `;
 
@@ -763,10 +816,31 @@ const SurahViewer = (() => {
       });
 
       // Handle copy button click
-      popup.querySelector('.verse-copy-btn').addEventListener('click', async (ev) => {
+      popup.querySelector('.verse-copy-btn:not(.verse-bookmark-btn)').addEventListener('click', async (ev) => {
         ev.stopPropagation();
         popup.remove();
         await VerseClipboard.copyVerseSet([ayahId], currentSurahVerses, currentSurahData?.name_arabic || '', 'تم نسخ الآية');
+      });
+
+      // Handle bookmark button click (toggle user ayah bookmark, max 10 FIFO)
+      popup.querySelector('.verse-bookmark-btn').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        popup.remove();
+        if (typeof QuranBookmarks === 'undefined') return;
+        if (localAyahNumber == null) {
+          VerseClipboard.showToast('تعذر حفظ المرجع', 'error');
+          return;
+        }
+        const surahName = currentSurahData?.name_arabic || '';
+        const nowSaved = QuranBookmarks.toggleAyahBookmark(
+          currentSurahId, localAyahNumber, surahName);
+        if (nowSaved == null) {
+          VerseClipboard.showToast('تعذر حفظ المرجع', 'error');
+        } else {
+          VerseClipboard.showToast(
+            nowSaved ? `تم حفظ المرجع (سورة ${surahName} - الآية ${localAyahNumber})` : 'تم حذف المرجع',
+            nowSaved ? 'success' : 'error');
+        }
       });
 
       // Auto-remove popup after 5 seconds
@@ -926,6 +1000,7 @@ const SurahViewer = (() => {
           const pageNum = parseInt(entry.target.dataset.pageNumber);
           if (!isNaN(pageNum)) {
             currentPageNumber = pageNum;
+            lastSeenPage = pageNum;
             pageNumDisplay.textContent = pageNum;
             prevBtn.disabled = pageNum <= 1;
             nextBtn.disabled = pageNum >= 604;
@@ -1124,6 +1199,7 @@ const SurahViewer = (() => {
     populatePartSelector,
     toggleFixedNav,
     scrollToPage,
+    scrollToAyah,
     showPageNavButtons,
     hidePageNavButtons
   };

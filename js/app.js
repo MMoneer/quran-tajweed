@@ -22,8 +22,13 @@ const App = (() => {
       return;
     }
 
-    // 0b. Register Service Worker for offline app-shell caching
-    if ('serviceWorker' in navigator) {
+    // 0b. Register Service Worker for offline app-shell caching.
+    // Skipped on file:// (direct browser use without a server): service
+    // workers require an http(s) origin, and the app is designed to work
+    // fully without one (IndexedDB + localStorage + https API calls).
+    const isHttp = window.location.protocol === 'http:' ||
+      window.location.protocol === 'https:';
+    if ('serviceWorker' in navigator && isHttp) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js', { scope: './' })
           .catch((e) => console.error('SW registration failed:', e));
@@ -91,7 +96,16 @@ const App = (() => {
     // 3. Initialize Surah List Index
     SurahIndex.init();
 
-    // 3b. Initialize Memorization view (loads persisted state from IndexedDB,
+    // 3b. Initialize Bookmarks (tabs + resume card + lists)
+    if (typeof QuranBookmarks !== 'undefined') {
+      try {
+        QuranBookmarks.init();
+      } catch (e) {
+        console.error('QuranBookmarks.init failed:', e);
+      }
+    }
+
+    // 3c. Initialize Memorization view (loads persisted state from IndexedDB,
     //     warms caches). MUST be awaited before setupRouter() so the initial
     //     route handler can call MemorizationView.render() with state loaded.
     if (typeof MemorizationView !== 'undefined') {
@@ -174,10 +188,18 @@ const App = (() => {
         readerSection.classList.add('active');
         SurahViewer.loadSurah(surahId);
       } else {
-        // Default to Surah Index list
+        // Default to Surah Index list (always on the Surahs tab)
         indexSection.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'instant' });
         SurahViewer.cleanup();
+        if (typeof QuranBookmarks !== 'undefined') {
+          try {
+            QuranBookmarks.showSurahsTab();
+            QuranBookmarks.render();
+          } catch (e) {
+            console.error('QuranBookmarks render error:', e);
+          }
+        }
         if (typeof QuranSearch !== 'undefined') {
           QuranSearch.restoreIfActive();
         }

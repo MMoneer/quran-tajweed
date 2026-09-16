@@ -4283,6 +4283,233 @@ body.light-theme .memorization-backlog-alert {
   flex-wrap: wrap;
 }
 
+/* ==========================================================================
+   Home Tabs (Surahs / Bookmarks) + Bookmarks lists + resume card
+   ========================================================================== */
+.home-tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.home-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 28px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-muted);
+  font-family: var(--font-arabic-ui);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.home-tab:hover {
+  color: var(--text-main);
+  border-color: var(--accent);
+}
+
+.home-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.bookmarks-count-badge {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.home-tab-panel {
+  display: none;
+}
+
+.home-tab-panel.active {
+  display: block;
+  animation: fadeSlideIn var(--transition-normal);
+}
+
+.bookmarks-container {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.resume-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.resume-card.empty {
+  border-color: var(--border-color);
+  opacity: 0.85;
+}
+
+.resume-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.resume-icon {
+  font-size: 22px;
+  color: var(--accent);
+}
+
+.resume-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-main);
+}
+
+.resume-text .empty-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.resume-btn {
+  flex-shrink: 0;
+}
+
+.bookmarks-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-main);
+  font-size: 16px;
+  margin: 0 0 10px 0;
+}
+
+.bookmarks-group-title i {
+  color: var(--accent);
+}
+
+.bookmarks-counter {
+  margin-inline-start: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.bookmarks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--text-main);
+  font-family: var(--font-arabic-ui);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: right;
+}
+
+button.bookmark-row:hover,
+.bookmark-row-goto:hover {
+  border-color: var(--accent);
+  background-color: var(--bg-card-hover);
+}
+
+.bookmark-row-goto {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: right;
+}
+
+.bookmark-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bookmark-row-icon {
+  color: var(--accent);
+}
+
+.bookmark-row-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.bookmark-row-delete {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.bookmark-row-delete:hover {
+  color: #ff5555;
+  background: rgba(255, 85, 85, 0.1);
+}
+
+.bookmarks-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 16px;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+}
+
+/* Saved state for the verse popup bookmark button */
+.verse-bookmark-btn.bookmarked {
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 480px) {
+  .home-tab {
+    padding: 8px 18px;
+    font-size: 14px;
+  }
+  .bookmark-row-time {
+    display: none;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   .plan-editor-modal {
     background: #1f2937;

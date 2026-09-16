@@ -55,6 +55,13 @@ A modern, interactive Quran reader with **Tajweed color coding**, audio playback
 - **Tajweed Color Customizer** - Full color picker for all 18 rules
 - **Reset to Defaults** - One-click reset to standard colors
 
+### Bookmarks (المرجعيات)
+- **Home Tabs** - Surahs tab (default) + Bookmarks tab with saved-count badge
+- **Resume Card** - "Continue reading" card opens the last surah + page you stopped at
+- **Recent Stops (automatic)** - Last 5 pages recorded only when leaving the reader or closing the browser (scrolling inside the reader and switching surahs don't count)
+- **My Bookmarks (manual)** - Save any ayah via the bookmark button in the verse popup (up to 10; oldest is replaced when full), with per-item delete
+- **localStorage persistence** - Keys `quran_last_position`, `quran_recent_pages`, `quran_user_bookmarks`; works on `file://` with no server
+
 ### Memorization (Hifz) & Spaced Repetition
 - **Full Hifz Planner** - Plan by ayahs, surahs, or pages per day with forward/backward direction
 - **Spaced-Repetition Engine** - SM-2–inspired scheduling with learning/reviewing/consolidating/stable/mastered stages
@@ -85,6 +92,7 @@ quran.com/
 │   ├── app.js              # SPA router and lifecycle controller
 │   ├── audioPlayer.js      # Audio player component
 │   ├── backupValidator.js  # Backup schema validation & normalization
+│   ├── bookmarks.js        # Reading history + user bookmarks (tabs, resume card)
 │   ├── clipboard.js        # Verse clipboard utilities (copy, toast, Arabic digits)
 │   ├── dataStore.js        # IndexedDB storage layer
 │   ├── dataImporter.js     # Bulk data import from API to IndexedDB
@@ -135,6 +143,7 @@ Each component is implemented as a **Revealing Module Pattern** (IIFE) exposing 
 | `MemorizationView` | Memorization dashboard, plan editor, backup/restore UI |
 | `IndexedDbAdapter` | Persistence adapter for memorization state |
 | `BackupValidator` | Backup schema validation/migration (V1–V3) |
+| `QuranBookmarks` | Home tabs, resume card, last-5 stops, up-to-10 ayah bookmarks (localStorage) |
 | `QuranMetaService` | Surah/ayah position math, juz/page mapping |
 | `PageIndex` | Builds the mushaf page ↔ ayah index from imported verses |
 | `DateUtils` | Local-calendar date arithmetic |
