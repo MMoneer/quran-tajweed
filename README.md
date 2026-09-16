@@ -124,7 +124,8 @@ quran.com/
 
 Two separate counters — do not mix them:
 
-- **`APP_VERSION`** (`js/version.js`, shown in Settings) — user-facing release version (semantic). Bump **only on releases**: major = breaking change/data migration, minor = new feature, patch = fixes only. Current: `1.1.0`.
+- **`APP_VERSION`** (`js/version.js`, shown in Settings) — user-facing release version (semantic). Bump **only on releases**: major = breaking change/data migration, minor = new feature, patch = fixes only. Current: `1.4.0`.
+- **GitHub Releases** — each release is published as a GitHub Release (e.g. `v1.4.0`) with notes; `APP_VERSION` must match the release tag (without the `v`).
 - **`CACHE_VERSION`** (`sw.js`, e.g. `quran-pwa-v19`) — internal offline-cache counter. Bump on **every** static-asset change (even one-line CSS) and list any new asset in `PRECACHE`, or offline/PWA clients will keep serving stale files. Never shown to users.
 
 ## Architecture

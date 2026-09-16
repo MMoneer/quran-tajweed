@@ -10,4 +10,4 @@
  * an internal counter bumped on EVERY asset change (even a one-line CSS fix)
  * so offline clients reliably fetch fresh files. Users never see it.
  */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.4.0';
