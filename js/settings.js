@@ -199,6 +199,21 @@ const SettingsManager = (() => {
     el.textContent = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : '—';
   }
 
+  /**
+   * Compare semantic versions ("1.4.0" vs "1.10.0").
+   * @returns {number} 1 if a > b, -1 if a < b, 0 if equal.
+   */
+  function compareVersions(a, b) {
+    const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+    const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+      const d = (pa[i] || 0) - (pb[i] || 0);
+      if (d !== 0) return d > 0 ? 1 : -1;
+    }
+    return 0;
+  }
+
   function init() {
     loadFromLocalStorage();
     displayAppVersion();
@@ -465,33 +480,67 @@ const SettingsManager = (() => {
       updateReaderPadding();
     });
 
-    // Check-for-updates button (PWA): forces an SW update check and
-    // applies it. No-op on file:// where no SW is registered.
+    // Check-for-updates button (PWA): compares the published version.js
+    // with the local one (definitive verdict), then asks the SW to update
+    // in the background. Each failure mode gets its own message so the
+    // real cause is visible instead of a generic "check internet".
     const btnUpdates = document.getElementById('btn-check-updates');
     const updateStatus = document.getElementById('update-status-text');
+    const say = (msg) => { if (updateStatus) updateStatus.textContent = msg; };
     btnUpdates?.addEventListener('click', async () => {
-      if (!('serviceWorker' in navigator)) {
-        if (updateStatus) updateStatus.textContent = 'التحديث التلقائي غير مدعوم على هذا المتصفح.';
+      if (window.location.protocol === 'file:') {
+        say('وضع ملف مباشر — حدّث الملفات يدوياً، لا توجد تحديثات تلقائية هنا.');
         return;
       }
+      if (!('serviceWorker' in navigator)) {
+        say('التحديث التلقائي غير مدعوم على هذا المتصفح.');
+        return;
+      }
+      say('جاري التحقق من التحديثات...');
+      const localVer = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : null;
+      // 1. Definitive check: fetch the PUBLISHED version.js with a
+      // cache-buster (plain fetch would be served the OLD cached copy by
+      // our own cache-first SW, making the comparison useless).
+      let remoteVer = null;
+      let fetchFailed = false;
       try {
-        if (updateStatus) updateStatus.textContent = 'جاري التحقق من التحديثات...';
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (!reg) {
-          if (updateStatus) updateStatus.textContent = 'لا يوجد عامل مثبت (وضع ملف مباشر) — أنت على أحدث نسخة محلية.';
-          return;
-        }
-        await reg.update();
-        // A new worker found? Our SW calls skipWaiting() itself, so it
-        // activates on its own and the app reloads via controllerchange.
-        const pending = reg.installing || reg.waiting;
-        if (updateStatus) {
-          updateStatus.textContent = pending
-            ? 'تم العثور على تحديث — يُثبَّت الآن وسيُطبَّق عند إعادة الفتح.'
-            : 'لا توجد تحديثات — أنت على أحدث إصدار.';
+        const res = await fetch('./js/version.js?v=' + Date.now(), { cache: 'no-store' });
+        if (res.ok) {
+          const m = (await res.text()).match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+          remoteVer = m ? m[1] : null;
+        } else {
+          fetchFailed = true;
         }
       } catch (e) {
-        if (updateStatus) updateStatus.textContent = 'تعذر التحقق — تحقق من الاتصال بالإنترنت.';
+        fetchFailed = true;
+      }
+      const updateAvailable = !!(remoteVer && localVer && compareVersions(remoteVer, localVer) > 0);
+      // 2. Ask the SW to pull the update in the background (best-effort).
+      // Our SW calls skipWaiting() itself, then the app reloads via
+      // the controllerchange handler in app.js.
+      let swError = null;
+      let workerPending = false;
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          await reg.update();
+          workerPending = !!(reg.installing || reg.waiting);
+        }
+      } catch (e) {
+        swError = e;
+        console.error('SW update failed:', (e && e.message) || e);
+      }
+      if (updateAvailable) {
+        say('يوجد إصدار أحدث (' + remoteVer + ') — ' +
+          (workerPending
+            ? 'يُثبَّت الآن وسيُطبَّق عند إعادة فتح التطبيق.'
+            : 'أعد فتح التطبيق مع الإنترنت لتثبيته.'));
+      } else if (remoteVer && localVer) {
+        say('لا توجد تحديثات — أنت على أحدث إصدار (' + localVer + ').');
+      } else if (fetchFailed || swError) {
+        say('تعذر التحقق — تحقق من الاتصال بالإنترنت ثم أعد المحاولة.');
+      } else {
+        say('تعذر قراءة الإصدار — أعد فتح التطبيق وحاول مجدداً.');
       }
     });
 
