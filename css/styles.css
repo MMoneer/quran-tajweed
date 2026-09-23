@@ -2727,6 +2727,41 @@ body.selection-active .verse {
   padding: 2rem;
 }
 
+.tajweed-note {
+  margin-top: 0.5rem;
+  padding: 1.3rem 1.4rem;
+  background: var(--bg-input);
+  border: 1px solid var(--accent-light);
+  border-inline-start: 4px solid var(--accent);
+  border-radius: 12px;
+  line-height: 2;
+}
+
+.tajweed-note-title {
+  color: var(--accent);
+  font-size: 1.05rem;
+  margin-bottom: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tajweed-note p {
+  color: var(--text-main);
+  font-size: 0.95rem;
+  margin-bottom: 0.6rem;
+}
+
+.tajweed-note p:last-child {
+  margin-bottom: 0;
+}
+
+.tajweed-note-quote {
+  color: var(--text-muted);
+  font-weight: 700;
+  text-align: center;
+}
+
 @media (max-width: 600px) {
   .tajweed-rules-container {
     padding: 1rem;
