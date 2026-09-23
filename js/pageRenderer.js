@@ -171,7 +171,35 @@ const PageRenderer = (() => {
       }
     }
 
-    return html;
+    // Compensate systematic upstream mistagging (see normalizeWawMonfasel).
+    // `data/` files are read-only, so the fix lives here at render time.
+    return normalizeWawMonfasel(html);
+  }
+
+  /**
+   * Normalize systematic upstream mistagging of Madd Munfasil on waw al-jamaa'a.
+   *
+   * FINAL RULE (agreed): a waw carrying maddah (ٓ U+0653) tagged
+   * `madda_obligatory_mottasel` + a silent alif (`slnt`) immediately after it
+   * at word end → retag as `madda_obligatory_monfasel`.
+   *
+   * Why: the fariqa alif only ever follows waw al-jamaa'a and is silent, so a
+   * true Muttasil on that waw is impossible by definition (Muttasil needs a
+   * hamza after the madd letter inside the SAME word, but only the silent
+   * alif follows). Any such tag is therefore Munfasil by cause, e.g. 18:102
+   * `كَفَرُوا أَن` mistagged `mottasel` vs `إِنَّا أَعْتَدْنَا` correctly
+   * `monfasel`. Evidence: the same word without a following hamza carries no
+   * tag at all (18:105 `كَفَرُوا بِـَٔايَاتِ`), and waw-final words without the
+   * fariqa alif are tagged correctly (12:16 `وَجَاءُوا أَبَاهُم` → `monfasel`).
+   * The fix is per-tag, so a true Muttasil on alif in the same token
+   * (`بَاءُوا`-pattern) is preserved. Upstream (QUL/Tarteel, feeding
+   * api.quran.com) states its annotation is automatic and may contain errors.
+   */
+  function normalizeWawMonfasel(html) {
+    return html.replace(
+      /<tajweed class="madda_obligatory_mottasel">([^<]*و[^<]*ٓ[^<]*)<\/tajweed><tajweed class="slnt">(ا[^<]*)<\/tajweed>/g,
+      '<tajweed class="madda_obligatory_monfasel">$1</tajweed><tajweed class="slnt">$2</tajweed>'
+    );
   }
   
   /**
@@ -326,6 +354,7 @@ const PageRenderer = (() => {
   return {
     renderSurahWithPages,
     buildWordHTML,
-    wrapNormalMadd
+    wrapNormalMadd,
+    normalizeWawMonfasel
   };
 })();

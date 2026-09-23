@@ -282,6 +282,14 @@ After first launch, follow the import wizard to download all 114 surahs. Quran t
 | `laam-shamsiyah` | لام شمسية | Gray | Solar Laam |
 | `slnt` | حرف صامت | Gray | Silent letter |
 
+> **ملاحظة تصحيحية (واو الجماعة + ألف فارقة):** بيانات التجويد القادمة من
+> `api.quran.com` (المولّدة آلياً عبر QUL/Tarteel) توسِم المد الجائز المنفصل
+> على واو الجماعة خطأً بصنف `متصل` (مثال `18:102` ﴿كَفَرُوا أَن﴾ مقابل
+> ﴿إِنَّا أَعْتَدْنَا﴾ الموسومة correctly منفصلاً). القاعدة المعتمدة: واو تحمل
+> المدّة `ٓ` موسومة `mottasel` + ألف صامتة `slnt` تليها مباشرةً ← تُعرض بلون
+> المنفصل. التنفيذ في `js/pageRenderer.js` (`normalizeWawMonfasel`) دون مساس
+> بملفات `data/` (مصدر الحقيقة، للقراءة فقط).
+
 ---
 
 ## Browser Support
