@@ -263,6 +263,57 @@ const QuranBookmarks = (() => {
     }[c]));
   }
 
+  // ── Ayah-opening previews (reference rows) ─────────────────
+  // Entries store `preview` (VersePreview rules, same as the part
+  // dropdown). Older entries lack it — fetch the surah once per batch,
+  // compute, persist, re-render. Offline failures simply retry later.
+
+  let previewBackfillRunning = false;
+
+  function ensureAyahPreviews() {
+    if (previewBackfillRunning) return;
+    if (typeof VersePreview === 'undefined' || typeof QuranAPI === 'undefined') return;
+    const missing = loadUser().filter(e => !e.preview);
+    if (!missing.length) return;
+
+    previewBackfillRunning = true;
+    let changed = false;
+    (async () => {
+      try {
+        const surahs = [...new Set(missing.map(e => e.surah))];
+        for (const surah of surahs) {
+          let verses = [];
+          try {
+            const data = await QuranAPI.getSurahLocal(surah);
+            verses = (data && data.verses) || [];
+          } catch (e) {
+            continue; // offline / fetch failed — retry on next render
+          }
+          const list = loadUser();
+          let surahChanged = false;
+          list.forEach(entry => {
+            if (entry.surah !== surah || entry.preview) return;
+            const verse = verses.find(v => v.verse_number === entry.ayah);
+            if (!verse) return;
+            const preview = VersePreview.getFromVerse(surah, entry.ayah, verse);
+            if (preview) {
+              entry.preview = preview;
+              surahChanged = true;
+            }
+          });
+          if (surahChanged) {
+            localStorage.setItem(USER_KEY, JSON.stringify(list));
+            changed = true;
+          }
+        }
+      } catch (e) {
+        console.error('ensureAyahPreviews failed:', e);
+      }
+      previewBackfillRunning = false;
+      if (changed) render();
+    })();
+  }
+
   function render() {
     const resumeCard = document.getElementById('resume-card');
     const recentList = document.getElementById('recent-pages-list');
@@ -327,11 +378,14 @@ const QuranBookmarks = (() => {
         : user.map(e => `
           <div class="bookmark-row">
             <button class="bookmark-row-goto" data-nav-type="ayah" data-surah="${e.surah}" data-ayah="${e.ayah}">
-              <span class="bookmark-row-main">
-                <i class="fa-solid fa-bookmark bookmark-row-icon"></i>
-                <span>سورة ${escapeHtml(surahLabel(e))} — الآية ${escapeHtml(e.ayah)}</span>
+              ${e.preview ? `<span class="bookmark-row-preview">${escapeHtml(e.preview)}…</span>` : ''}
+              <span class="bookmark-row-meta">
+                <span class="bookmark-row-main">
+                  <i class="fa-solid fa-bookmark bookmark-row-icon"></i>
+                  <span>سورة ${escapeHtml(surahLabel(e))} — الآية ${escapeHtml(e.ayah)}</span>
+                </span>
+                <span class="bookmark-row-time">${escapeHtml(timeAgo(e.timestamp))}</span>
               </span>
-              <span class="bookmark-row-time">${escapeHtml(timeAgo(e.timestamp))}</span>
             </button>
             <button class="bookmark-row-delete" data-del-surah="${e.surah}" data-del-ayah="${e.ayah}" title="حذف المرجع" aria-label="حذف المرجع">
               <i class="fa-solid fa-trash"></i>
@@ -357,6 +411,9 @@ const QuranBookmarks = (() => {
         }
       });
     }
+
+    // Backfill missing ayah-opening previews (async, re-renders once)
+    ensureAyahPreviews();
   }
 
   /**

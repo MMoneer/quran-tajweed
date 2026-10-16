@@ -203,12 +203,13 @@ const QuranSearch = (() => {
     indexBuildPromise = (async () => {
       const container = document.getElementById('surah-grid');
       if (!container) return;
+      // Index ONLY surahs already stored locally — never fetch during indexing
+      // (in online-only mode indexing all 114 would silently download ~96 MB).
+      const localIds = await DataStore.getImportedSurahIds();
+      if (localIds.length === 0) return;
       const indexed = await DataStore.getIndexedSurahIds();
       const indexedSet = new Set(indexed);
-      const missing = [];
-      for (let id = 1; id <= 114; id++) {
-        if (!indexedSet.has(id)) missing.push(id);
-      }
+      const missing = localIds.filter(id => !indexedSet.has(id)).sort((a, b) => a - b);
       if (missing.length === 0) return;
 
       for (let i = 0; i < missing.length; i++) {
@@ -220,7 +221,7 @@ const QuranSearch = (() => {
           </div>
         `;
         try {
-          const surahData = await QuranAPI.getSurahLocal(id);
+          const surahData = await DataStore.getSurah(id);
           if (surahData && surahData.verses) {
             const entries = surahData.verses.map((v, i) => ({
               ayah: i + 1,
@@ -366,6 +367,10 @@ const QuranSearch = (() => {
     const { text, isPhrase } = parsePhraseQuery(rawQuery);
     const query = normalizeArabic(text);
     const nameMap = await loadSurahNameMap();
+    const indexedCount = (await DataStore.getIndexedSurahIds()).length;
+    const coverageNote = indexedCount < 114
+      ? `<p class="search-coverage-note"><i class="fa-solid fa-circle-info"></i> البحث الحالي يشمل السور المفهرسة على الجهاز فقط (${toArabicIndic(indexedCount)}/${toArabicIndic(114)})</p>`
+      : '';
 
     if (results.length === 0) {
       if (renderGeneration !== searchGeneration) return;
@@ -373,6 +378,7 @@ const QuranSearch = (() => {
         <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
           <i class="fa-solid fa-magnifying-glass" style="font-size: 24px; margin-bottom: 8px;"></i>
           <p>لا توجد نتائج تطابق بحثك.</p>
+          ${coverageNote}
         </div>
       `;
       return;
@@ -395,6 +401,7 @@ const QuranSearch = (() => {
           </div>
         </div>
       </div>
+      ${coverageNote}
     `;
 
     async function renderNextChunk() {
@@ -678,50 +685,66 @@ const QuranSearch = (() => {
    * @param {string[]} searches
    */
   function renderDropdown(dropdown, searches) {
-    const items = searches
-      .map(q => `
-        <div class="recent-search-item">
-          <button type="button" class="recent-search-query">
-            <i class="fa-solid fa-clock-rotate-left"></i>
-            <span>${q}</span>
-          </button>
-          <button type="button" class="recent-search-remove" data-q="${q}" title="حذف">✕</button>
-        </div>
-      `).join('');
+    dropdown.replaceChildren();
 
-    dropdown.innerHTML = `
-      <div class="recent-header">البحث الأخير</div>
-      ${items || '<div class="recent-empty">لا يوجد بحث سابق</div>'}
-      <button type="button" id="btn-clear-recent" class="recent-clear-all">
-        <i class="fa-solid fa-trash-can"></i> مسح السجل
-      </button>
-    `;
+    const header = document.createElement('div');
+    header.className = 'recent-header';
+    header.textContent = 'البحث الأخير';
+    dropdown.appendChild(header);
 
-    dropdown.querySelectorAll('.recent-search-query').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const q = btn.querySelector('span').textContent;
-        document.getElementById('surah-search').value = q;
-        dropdown.hidden = true;
-        clearTimeout(searchDebounceTimer);
-        QuranSearch.execute(q);
-      });
-    });
+    if (searches.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'recent-empty';
+      empty.textContent = 'لا يوجد بحث سابق';
+      dropdown.appendChild(empty);
+    } else {
+      searches.forEach(q => {
+        const item = document.createElement('div');
+        item.className = 'recent-search-item';
 
-    dropdown.querySelectorAll('.recent-search-remove').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        removeRecentSearch(btn.dataset.q);
-        refreshDropdown();
-      });
-    });
+        const queryBtn = document.createElement('button');
+        queryBtn.type = 'button';
+        queryBtn.className = 'recent-search-query';
+        const clockIcon = document.createElement('i');
+        clockIcon.className = 'fa-solid fa-clock-rotate-left';
+        const label = document.createElement('span');
+        label.textContent = q;
+        queryBtn.append(clockIcon, label);
+        queryBtn.addEventListener('click', () => {
+          document.getElementById('surah-search').value = q;
+          dropdown.hidden = true;
+          clearTimeout(searchDebounceTimer);
+          QuranSearch.execute(q);
+        });
 
-    const btnClear = document.getElementById('btn-clear-recent');
-    if (btnClear) {
-      btnClear.addEventListener('click', () => {
-        clearRecentSearches();
-        refreshDropdown();
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'recent-search-remove';
+        removeBtn.title = 'حذف';
+        removeBtn.textContent = '✕';
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeRecentSearch(q);
+          refreshDropdown();
+        });
+
+        item.append(queryBtn, removeBtn);
+        dropdown.appendChild(item);
       });
     }
+
+    const btnClear = document.createElement('button');
+    btnClear.type = 'button';
+    btnClear.id = 'btn-clear-recent';
+    btnClear.className = 'recent-clear-all';
+    const trashIcon = document.createElement('i');
+    trashIcon.className = 'fa-solid fa-trash-can';
+    btnClear.append(trashIcon, ' مسح السجل');
+    btnClear.addEventListener('click', () => {
+      clearRecentSearches();
+      refreshDropdown();
+    });
+    dropdown.appendChild(btnClear);
   }
 
   /**
@@ -759,9 +782,7 @@ const QuranSearch = (() => {
    */
   async function execute(rawQuery) {
     const query = rawQuery.trim();
-    const input = document.getElementById('surah-search');
     const btnClear = document.getElementById('clear-search');
-    if (input) input.value = query;
     if (btnClear) btnClear.style.display = query ? 'flex' : 'none';
 
     const { text } = parsePhraseQuery(query);

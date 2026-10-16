@@ -79,6 +79,9 @@ const SurahViewer = (() => {
       PageRenderer.renderSurahWithPages(surahData);
       const renderTime = performance.now() - renderStart;
       console.log(`[Perf] Render: ${renderTime.toFixed(1)}ms (${surahData.verses.length} verses)`);
+
+      // Dynamic page view: fit mushaf pages to ~98dvh when enabled
+      if (typeof DynamicPage !== 'undefined') DynamicPage.onSurahRendered();
       
       // Setup page navigation buttons
       setupPageNavigation();
@@ -111,7 +114,9 @@ const SurahViewer = (() => {
         window._pendingAyahScroll = null;
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            scrollToAyah(targetAyah);
+            // Instant jump: a smooth scroll would sweep the page counter
+            // through every intermediate page on the way to the target.
+            scrollToAyah(targetAyah, 'auto');
           });
         });
       } else if (window._pendingPageScroll) {
@@ -119,7 +124,8 @@ const SurahViewer = (() => {
         window._pendingPageScroll = null;
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            scrollToPage(targetPage);
+            // Instant jump (see above).
+            scrollToPage(targetPage, 'auto');
           });
         });
       } else {
@@ -129,16 +135,33 @@ const SurahViewer = (() => {
     } catch (error) {
       if (generation !== loadGeneration) return;
       console.error(`Failed to load Surah ${currentSurahId}:`, error);
+      const unavailable = error && error.code === 'SURAH_NOT_AVAILABLE';
+      const message = unavailable
+        ? (error.offline
+          ? 'هذه السورة غير محفوظة على جهازك، وأنت غير متصل بالإنترنت. اتصل بالإنترنت ثم أعد المحاولة.'
+          : 'هذه السورة غير محفوظة على جهازك وتعذر جلبها من الخادم. يمكنك إعادة تحميل بيانات القرآن من الإعدادات.')
+        : 'عذراً، فشل تحميل آيات السورة المباركة. يرجى التحقق من الاتصال بالإنترنت.';
+      const settingsCta = unavailable && !error.offline
+        ? '<button id="btn-goto-refetch" class="btn-action" style="margin: 12px auto 0 auto;">الإعدادات → إعادة تحميل البيانات</button>'
+        : '';
       container.innerHTML = `
         <div class="error-container" style="text-align: center; padding: 40px; color: var(--text-muted);">
           <i class="fa-solid fa-triangle-exclamation" style="font-size: 32px; color: var(--accent); margin-bottom: 12px;"></i>
-          <p>عذراً، فشل تحميل آيات السورة المباركة. يرجى التحقق من الاتصال بالإنترنت.</p>
+          <p>${message}</p>
           <button id="btn-retry-reader" class="btn-action" style="margin: 16px auto 0 auto;">إعادة المحاولة</button>
+          ${settingsCta}
         </div>
       `;
       loading.style.display = 'none';
       
       document.getElementById('btn-retry-reader')?.addEventListener('click', () => loadSurah(currentSurahId));
+      document.getElementById('btn-goto-refetch')?.addEventListener('click', () => {
+        const drawer = document.getElementById('settings-drawer');
+        if (drawer && !drawer.classList.contains('open')) {
+          document.getElementById('btn-settings')?.click();
+        }
+        document.getElementById('btn-refetch-data')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
     }
   }
 
@@ -186,16 +209,16 @@ const SurahViewer = (() => {
   /**
     * Build page-to-surah mapping for current surah
     */
-  function scrollToPage(pageNumber) {
+  function scrollToPage(pageNumber, behavior = 'smooth') {
     const pageSection = document.querySelector(`.page-section[data-page-number="${pageNumber}"]`);
     if (pageSection) {
-      pageSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      pageSection.scrollIntoView({ behavior, block: 'start' });
       return true;
     }
     return false;
   }
 
-  function scrollToAyah(ayahNumber) {
+  function scrollToAyah(ayahNumber, behavior = 'smooth') {
     // Convert local ayah number to global verse ID
     let globalId = ayahNumber;
     if (currentSurahVerses.length > 0 && ayahNumber >= 1 && ayahNumber <= currentSurahVerses.length) {
@@ -205,13 +228,13 @@ const SurahViewer = (() => {
     if (verseEl) {
       const prevJuzDivider = verseEl.previousElementSibling;
       if (prevJuzDivider && prevJuzDivider.classList.contains('juz-divider')) {
-        prevJuzDivider.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        prevJuzDivider.scrollIntoView({ behavior, block: 'start' });
       } else {
         const parentJuzDivider = verseEl.closest('.page-section')?.previousElementSibling;
         if (parentJuzDivider && parentJuzDivider.classList.contains('juz-divider')) {
-          parentJuzDivider.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          parentJuzDivider.scrollIntoView({ behavior, block: 'start' });
         } else {
-          verseEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          verseEl.scrollIntoView({ behavior, block: 'start' });
         }
       }
       return true;
@@ -263,14 +286,24 @@ const SurahViewer = (() => {
   }
 
   let selectedPartRub = null;
+  let readerDropdown = null;
+  let homeDropdown = null;
+  let homeSelectedPartRub = null;
+
+  const READER_DROPDOWN_IDS = {
+    root: 'part-dropdown',
+    btn: 'part-dropdown-btn',
+    panel: 'part-dropdown-panel',
+    label: 'part-dropdown-label',
+    list: 'part-dropdown-list'
+  };
 
   /**
-    * Populate the custom part dropdown: one sticky group per juz
+    * Fill a custom part dropdown list with one sticky group per juz
     * (30 groups), each holding its 8 quarters as two-line items:
     * preview line + muted label line (like the reference app).
     */
-  function populatePartSelector() {
-    const list = document.getElementById('part-dropdown-list');
+  function populatePartList(list) {
     if (!list || list.childElementCount > 0) return;
 
     const frag = document.createDocumentFragment();
@@ -320,19 +353,22 @@ const SurahViewer = (() => {
   }
 
   /**
-    * Wire the custom part dropdown open/close/selection (once only).
+    * Wire one custom part dropdown instance: open/close/selection.
     * Desktop: panel floats under the button. Mobile: panel is fixed
     * and centered (native pickers can't be styled, so we render our own).
+    * Returns { populate, getSelected } or null when DOM ids are missing.
     */
-  function setupPartDropdown() {
-    if (window._partDropdownSetup) return;
-    window._partDropdownSetup = true;
+  function createPartDropdown(ids, onSelect) {
+    const root = document.getElementById(ids.root);
+    const btn = document.getElementById(ids.btn);
+    const panel = document.getElementById(ids.panel);
+    const label = document.getElementById(ids.label);
+    const list = document.getElementById(ids.list);
+    if (!root || !btn || !panel || !label || !list) return null;
 
-    const root = document.getElementById('part-dropdown');
-    const btn = document.getElementById('part-dropdown-btn');
-    const panel = document.getElementById('part-dropdown-panel');
-    const label = document.getElementById('part-dropdown-label');
-    if (!root || !btn || !panel || !label) return;
+    let selectedRub = null;
+
+    const populate = () => populatePartList(list);
 
     const close = () => {
       panel.classList.remove('open');
@@ -340,7 +376,7 @@ const SurahViewer = (() => {
     };
 
     const open = () => {
-      populatePartSelector();
+      populate();
       panel.classList.add('open');
       btn.setAttribute('aria-expanded', 'true');
       if (window.innerWidth <= 900) {
@@ -373,11 +409,33 @@ const SurahViewer = (() => {
       panel.querySelectorAll('.part-item.selected')
         .forEach(el => el.classList.remove('selected'));
       item.classList.add('selected');
-      selectedPartRub = parseInt(item.dataset.rub);
+      selectedRub = parseInt(item.dataset.rub);
       label.textContent = item.dataset.short || 'اختر…';
       close();
-      goToPart(selectedPartRub);
+      if (onSelect) onSelect(selectedRub);
     });
+
+    return { populate, getSelected: () => selectedRub };
+  }
+
+  function ensureReaderDropdown() {
+    if (!readerDropdown) {
+      readerDropdown = createPartDropdown(READER_DROPDOWN_IDS, (rub) => {
+        selectedPartRub = rub;
+        goToPart(rub);
+      });
+    }
+    return readerDropdown;
+  }
+
+  function populatePartSelector() {
+    ensureReaderDropdown()?.populate();
+  }
+
+  function setupPartDropdown() {
+    if (window._partDropdownSetup) return;
+    window._partDropdownSetup = true;
+    ensureReaderDropdown();
   }
 
   /**
@@ -428,6 +486,49 @@ const SurahViewer = (() => {
         window.location.hash = targetHash;
       }
     }
+  }
+
+  /**
+    * Reject more than 3 digits in a page number input (pages are 1..604).
+    */
+  function limitPageInputDigits(input) {
+    if (!input) return;
+    const clamp = () => {
+      if (input.value && input.value.length > 3) {
+        input.value = input.value.slice(0, 3);
+      }
+    };
+    input.addEventListener('input', clamp);
+    input.addEventListener('change', clamp);
+  }
+
+  /**
+    * Wire a page-jump field: number input (max 3 digits), go button, Enter
+    * key, and spinner buttons — spinners scoped to this field's own wrapper
+    * so the reader nav and the home quick-nav never cross-wire.
+    */
+  function wirePageNavField(inputId, goBtnId, onGo) {
+    const input = document.getElementById(inputId);
+    const goBtn = document.getElementById(goBtnId);
+    if (!input) return null;
+    limitPageInputDigits(input);
+
+    goBtn?.addEventListener('click', () => onGo(input.value));
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') onGo(input.value);
+    });
+
+    const scope = input.closest('.page-input-wrapper') || document;
+    scope.querySelectorAll('.page-spinner-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = parseInt(input.value) || 1;
+        const dir = btn.dataset.dir;
+        const newVal = dir === 'up' ? Math.min(val + 1, 604) : Math.max(val - 1, 1);
+        input.value = newVal;
+        onGo(newVal);
+      });
+    });
+    return input;
   }
 
   /**
@@ -529,6 +630,49 @@ const SurahViewer = (() => {
    */
   function removePlayPopup() {
     document.querySelector('.verse-play-popup')?.remove();
+    if (playPopupReposition) {
+      playPopupReposition();
+      playPopupReposition = null;
+    }
+  }
+
+  // Detaches the scroll/resize listeners of the currently open popup.
+  let playPopupReposition = null;
+
+  /**
+   * Place the verse play/copy popup as a body-level popover.
+   *
+   * Design contract: the bubble ALWAYS floats above its verse,
+   * horizontally centered, arrow pointing down — identical on every
+   * verse, including the first line of a page. It is appended to
+   * document.body (position:fixed, z-index above all reader chrome),
+   * so no ancestor overflow or stacking context can clip or cover it.
+   */
+  function placePlayPopup(popup, verse) {
+    const GAP = 8; // original margin-bottom: floats 8px above the verse
+    const vr = verse.getBoundingClientRect();
+    const pw = popup.offsetWidth;
+    const ph = popup.offsetHeight;
+
+    // Center on the verse, clamped so the bubble never leaves the viewport.
+    const centerX = vr.left + vr.width / 2;
+    const half = pw / 2;
+    const left = Math.min(
+      Math.max(centerX, half + 8),
+      window.innerWidth - half - 8
+    );
+
+    // Always above the verse; clamped to the viewport top so it paints OVER
+    // fixed chrome instead of hiding behind it — never below, never off-screen.
+    const top = Math.max(vr.top - ph - GAP, 8);
+
+    popup.style.left = Math.round(left) + 'px';
+    popup.style.top = Math.round(top) + 'px';
+
+    // Arrow tracks the verse center when clamping shifts the bubble.
+    const edge = left - half;
+    const ax = Math.min(Math.max(centerX - edge, 18), pw - 18);
+    popup.style.setProperty('--arrow-x', Math.round(ax) + 'px');
   }
 
   /**
@@ -804,28 +948,42 @@ const SurahViewer = (() => {
         </button>
       `;
 
-      // Position popup near the verse
-      verse.style.position = 'relative';
-      verse.appendChild(popup);
+      // Body-portal popover: always above the verse, centered,
+      // painted above all reader chrome (see placePlayPopup).
+      document.body.appendChild(popup);
+      placePlayPopup(popup, verse);
+
+      // Keep the popover glued to its verse while open (scroll/resize).
+      if (playPopupReposition) playPopupReposition();
+      const onPopupReposition = () => {
+        if (!popup.isConnected || !verse.isConnected) return;
+        placePlayPopup(popup, verse);
+      };
+      document.addEventListener('scroll', onPopupReposition, true);
+      window.addEventListener('resize', onPopupReposition);
+      playPopupReposition = () => {
+        document.removeEventListener('scroll', onPopupReposition, true);
+        window.removeEventListener('resize', onPopupReposition);
+      };
 
       // Handle play button click
       popup.querySelector('.verse-play-btn').addEventListener('click', (ev) => {
         ev.stopPropagation();
-        popup.remove();
+        removePlayPopup();
         AudioPlayer.playAyah(ayahId);
       });
 
       // Handle copy button click
       popup.querySelector('.verse-copy-btn:not(.verse-bookmark-btn)').addEventListener('click', async (ev) => {
         ev.stopPropagation();
-        popup.remove();
+        removePlayPopup();
         await VerseClipboard.copyVerseSet([ayahId], currentSurahVerses, currentSurahData?.name_arabic || '', 'تم نسخ الآية');
       });
 
       // Handle bookmark button click (toggle user ayah bookmark, max 10 FIFO)
       popup.querySelector('.verse-bookmark-btn').addEventListener('click', (ev) => {
         ev.stopPropagation();
-        popup.remove();
+        removePlayPopup();
         if (typeof QuranBookmarks === 'undefined') return;
         if (localAyahNumber == null) {
           VerseClipboard.showToast('تعذر حفظ المرجع', 'error');
@@ -845,7 +1003,7 @@ const SurahViewer = (() => {
 
       // Auto-remove popup after 5 seconds
       setTimeout(() => {
-        if (popup.parentNode) popup.remove();
+        if (popup.parentNode) removePlayPopup();
       }, 5000);
     });
 
@@ -935,30 +1093,10 @@ const SurahViewer = (() => {
       }
     });
     
-    // Page navigation
-    const btnGoPage = document.getElementById('btn-go-page');
-    const pageInput = document.getElementById('page-number-input');
-    
-    btnGoPage?.addEventListener('click', () => {
-      goToPage(pageInput.value);
-    });
-    
-    pageInput?.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        goToPage(pageInput.value);
-      }
-    });
-
-    // Custom page spinner buttons
-    document.querySelectorAll('.page-spinner-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const val = parseInt(pageInput.value) || 1;
-        const dir = btn.dataset.dir;
-        const newVal = dir === 'up' ? Math.min(val + 1, 604) : Math.max(val - 1, 1);
-        pageInput.value = newVal;
-        goToPage(newVal);
-      });
-    });
+    // Page navigation (input + go button + spinners scoped to this wrapper;
+    // input rejects more than 3 digits)
+    wirePageNavField('page-number-input', 'btn-go-page',
+      (value) => goToPage(value));
 
     // Part navigation (custom dropdown)
     setupPartDropdown();
@@ -975,6 +1113,73 @@ const SurahViewer = (() => {
   }
 
   /**
+    * Navigate the home quick-nav part dropdown to a rub (1..240).
+    * Uses the quarter table when available, else the juz table.
+    */
+  function homeGoToRub(rub) {
+    if (typeof HIZB_QUARTER_DATA !== 'undefined') {
+      const entry = HIZB_QUARTER_DATA.find(e => e.rub === rub);
+      if (entry) {
+        QuranBookmarks.navigateToAyah(entry.surah, entry.ayah);
+        return;
+      }
+    }
+    if (typeof JUZ_DATA !== 'undefined') {
+      const juz = JUZ_DATA.find(j => j.juz === rub);
+      if (juz) QuranBookmarks.navigateToAyah(juz.surah, juz.ayah);
+    }
+  }
+
+  /**
+    * Home quick-nav under the tabs: page-jump field + part dropdown.
+    * Mirrors the reader nav, but navigates away from the home view via
+    * QuranBookmarks. Called once from app.js after init.
+    */
+  function setupHomeQuickNav() {
+    if (window._homeQuickNavSetup) return;
+    window._homeQuickNavSetup = true;
+
+    wirePageNavField('home-page-number-input', 'btn-home-go-page', (value) => {
+      const page = parseInt(value);
+      if (isNaN(page) || page < 1 || page > 604) return;
+      QuranBookmarks.navigateToPage(findSurahForPage(page), page);
+    });
+
+    homeDropdown = createPartDropdown({
+      root: 'home-part-dropdown',
+      btn: 'home-part-dropdown-btn',
+      panel: 'home-part-dropdown-panel',
+      label: 'home-part-dropdown-label',
+      list: 'home-part-dropdown-list'
+    }, (rub) => {
+      homeSelectedPartRub = rub;
+      homeGoToRub(rub);
+    });
+
+    document.getElementById('btn-home-go-part')?.addEventListener('click', () => {
+      if (homeSelectedPartRub) {
+        homeGoToRub(homeSelectedPartRub);
+      } else {
+        document.getElementById('home-part-dropdown-btn')?.click();
+      }
+    });
+  }
+
+  /**
+   * Update the side page indicator + prev/next button states.
+   * Single place so button clicks (optimistic) and the page
+   * observer always agree on the current page number.
+   */
+  function setSidePageIndicator(pageNum, prevBtn, nextBtn, pageNumDisplay) {
+    if (isNaN(pageNum) || pageNum < 1 || pageNum > 604) return;
+    currentPageNumber = pageNum;
+    lastSeenPage = pageNum;
+    pageNumDisplay.textContent = pageNum;
+    prevBtn.disabled = pageNum <= 1;
+    nextBtn.disabled = pageNum >= 604;
+  }
+
+  /**
    * Setup page navigation buttons with Intersection Observer
    */
   function setupPageNavigation() {
@@ -986,29 +1191,55 @@ const SurahViewer = (() => {
     const prevBtn = document.getElementById('btn-prev-page');
     const nextBtn = document.getElementById('btn-next-page');
     const pageNumDisplay = document.getElementById('page-nav-current');
+    const setPage = (n) => setSidePageIndicator(n, prevBtn, nextBtn, pageNumDisplay);
 
-    // Reset to page 1
-    currentPageNumber = 1;
-    pageNumDisplay.textContent = '1';
-    prevBtn.disabled = true;
-    nextBtn.disabled = false;
+    // Reset to the first mushaf page of THIS surah (not hardcoded 1:
+    // e.g. Al-Baqarah starts at page 2) — or straight to a pending
+    // cross-surah jump target so the counter never flashes an
+    // intermediate value before the instant jump lands.
+    const firstSection = document.querySelector('.page-section[data-page-number]');
+    const pendingPage = parseInt(window._pendingPageScroll);
+    setPage(
+      (!isNaN(pendingPage) && pendingPage >= 1 && pendingPage <= 604)
+        ? pendingPage
+        : (parseInt(firstSection?.dataset.pageNumber) || 1)
+    );
 
-    // Create Intersection Observer to track current page
+    // Track the page under a thin "reading line" just below the fixed
+    // header/nav (top-anchored band). The old centered 20% band
+    // (rootMargin -40%/-40%, threshold 0) switched the counter as soon
+    // as the NEXT page touched the viewport middle, and when two pages
+    // shared the band the last callback entry won arbitrarily — leaving
+    // the counter stuck (e.g. 13) after jumping back to a short page
+    // (e.g. 12) whose body never reaches the middle. Top-anchored +
+    // uppermost-wins gives hysteresis: the counter flips only once the
+    // old page has fully passed the reading line.
+    const headerH = document.querySelector('.app-header')?.offsetHeight || 72;
+    const navH = document.querySelector('#fixed-nav')?.offsetHeight || 56;
+    const topInset = headerH + navH + 8;
+    const visibleSections = new Map();
     pageObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const pageNum = parseInt(entry.target.dataset.pageNumber);
-          if (!isNaN(pageNum)) {
-            currentPageNumber = pageNum;
-            lastSeenPage = pageNum;
-            pageNumDisplay.textContent = pageNum;
-            prevBtn.disabled = pageNum <= 1;
-            nextBtn.disabled = pageNum >= 604;
-          }
-        }
+        const num = parseInt(entry.target.dataset.pageNumber);
+        if (isNaN(num)) return;
+        if (entry.isIntersecting) visibleSections.set(num, entry);
+        else visibleSections.delete(num);
       });
+      if (!visibleSections.size) return;
+      // Uppermost section wins: keeps the old page while the boundary
+      // is still crossing the line (no premature flip, no flicker).
+      // Live getBoundingClientRect (not the cached entry rect) so sections
+      // reported in different callback batches are ranked consistently.
+      let winner = null;
+      let winnerTop = Infinity;
+      visibleSections.forEach(entry => {
+        const top = entry.target.getBoundingClientRect().top;
+        if (top < winnerTop) { winnerTop = top; winner = entry; }
+      });
+      const pageNum = parseInt(winner.target.dataset.pageNumber);
+      if (pageNum !== currentPageNumber) setPage(pageNum);
     }, {
-      rootMargin: '-40% 0px -40% 0px',
+      rootMargin: `-${topInset}px 0px -60% 0px`,
       threshold: 0
     });
 
@@ -1017,16 +1248,34 @@ const SurahViewer = (() => {
       pageObserver.observe(section);
     });
 
-    // Add click handlers
+    // Add click handlers (optimistic: update the counter immediately so
+    // a second click during the smooth scroll targets the right page;
+    // the observer confirms on arrival. If the target page is not in
+    // this surah (e.g. past its last page), fall back to cross-surah
+    // navigation instead of leaving the counter out of sync.
+    const hasPage = (n) =>
+      !!document.querySelector(`.page-section[data-page-number="${n}"]`);
     prevBtn.onclick = () => {
       if (currentPageNumber > 1) {
-        scrollToPage(currentPageNumber - 1);
+        const target = currentPageNumber - 1;
+        if (hasPage(target)) {
+          setPage(target);
+          scrollToPage(target);
+        } else {
+          goToPage(target);
+        }
       }
     };
 
     nextBtn.onclick = () => {
       if (currentPageNumber < 604) {
-        scrollToPage(currentPageNumber + 1);
+        const target = currentPageNumber + 1;
+        if (hasPage(target)) {
+          setPage(target);
+          scrollToPage(target);
+        } else {
+          goToPage(target);
+        }
       }
     };
   }
@@ -1196,6 +1445,7 @@ const SurahViewer = (() => {
     cleanup,
     setupNavigationListeners,
     setupSwipeNavigation,
+    setupHomeQuickNav,
     populatePartSelector,
     toggleFixedNav,
     scrollToPage,

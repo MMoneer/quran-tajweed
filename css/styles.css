@@ -848,6 +848,32 @@ body:not(.tajweed-active) tajweed {
   color: inherit !important;
 }
 
+/* Per-rule OFF overrides — disabled rules fall back to plain text color.
+   Legend and tajweed-rules reference page are NOT affected (text only). */
+body.tajweed-active.tajweed-off-ham-wasl tajweed.ham_wasl,
+body.tajweed-active.tajweed-off-laam-shamsiyah tajweed.laam_shamsiyah,
+body.tajweed-active.tajweed-off-slnt tajweed.slnt,
+body.tajweed-active.tajweed-off-madda-normal tajweed.madda_normal,
+body.tajweed-active.tajweed-off-madda-normal tajweed.custom-alef-maksora,
+body.tajweed-active.tajweed-off-madda-permissible tajweed.madda_permissible,
+body.tajweed-active.tajweed-off-madda-obligatory tajweed.madda_obligatory,
+body.tajweed-active.tajweed-off-madda-obligatory tajweed.madda_obligatory_mottasel,
+body.tajweed-active.tajweed-off-madda-obligatory-monfasel tajweed.madda_obligatory_monfasel,
+body.tajweed-active.tajweed-off-madda-necessary tajweed.madda_necessary,
+body.tajweed-active.tajweed-off-ghunnah tajweed.ghunnah,
+body.tajweed-active.tajweed-off-ikhafa tajweed.ikhafa,
+body.tajweed-active.tajweed-off-ikhafa-shafawi tajweed.ikhafa_shafawi,
+body.tajweed-active.tajweed-off-idgham-ghunnah tajweed.idgham_ghunnah,
+body.tajweed-active.tajweed-off-idgham-wo-ghunnah tajweed.idgham_wo_ghunnah,
+body.tajweed-active.tajweed-off-idgham-shafawi tajweed.idgham_shafawi,
+body.tajweed-active.tajweed-off-iqlab tajweed.iqlab,
+body.tajweed-active.tajweed-off-qalaqah tajweed.qalaqah,
+body.tajweed-active.tajweed-off-tafkhim tajweed.tafkhim,
+body.tajweed-active.tajweed-off-idgham-mutajanisayn tajweed.idgham_mutajanisayn {
+  color: inherit !important;
+  font-weight: inherit;
+}
+
 /* ==========================================================================
    Aside: Customizer / Settings Drawer
    ========================================================================== */
@@ -1107,6 +1133,91 @@ input:checked + .slider:before {
 }
 body.light-theme .rule-dot {
   border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Per-rule enable/disable eye button (replaces .rule-dot preview) */
+.rule-toggle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  padding: 0;
+}
+.rule-toggle:hover {
+  transform: scale(1.1);
+}
+.rule-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.rule-toggle.off {
+  background: transparent !important;
+  color: var(--text-muted);
+  text-shadow: none;
+  border-style: dashed;
+}
+.rule-color-item.disabled {
+  opacity: 0.45;
+}
+.rule-color-item.disabled input[type="color"] {
+  pointer-events: none;
+}
+
+/* Category header row with group switch + counter */
+.category-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.category-title-row .category-title {
+  margin-bottom: 0;
+}
+.category-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.category-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 28px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.switch-small {
+  width: 38px;
+  height: 20px;
+}
+.switch-small .slider:before {
+  height: 12px;
+  width: 12px;
+  left: 3px;
+  bottom: 3px;
+}
+.switch-small input:checked + .slider:before {
+  transform: translateX(18px);
+}
+.group-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+/* Master OFF dims the whole tajweed color section */
+.rules-categories.master-off {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 .rule-color-item label {
@@ -1429,6 +1540,14 @@ body.light-theme .skeleton-card {
   min-height: 60px;
 }
 
+/* Divider nested inside its page section: the section's own horizontal
+   padding already insets it, so drop its side margins to preserve the
+   exact pre-nesting appearance in normal mode. */
+.page-section .page-divider {
+  margin-left: 0;
+  margin-right: 0;
+}
+
 .divider-line {
   flex: 1;
   height: 1px;
@@ -1461,8 +1580,12 @@ body.light-theme .page-number {
 .juz-divider {
   display: flex;
   align-items: center;
-  margin: 24px 10px;
-  padding: 8px 0;
+  /* Compact by design: this marker sits inside the text flow, so every
+     pixel of its height counts against the densest page in dynamic
+     fit (a mid-page divider's margins never collapse, unlike a
+     page-top one). Keep it legible but minimal. */
+  margin: 6px 10px;
+  padding: 2px 0;
   scroll-margin-top: 140px;
 }
 
@@ -1476,9 +1599,9 @@ body.light-theme .page-number {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 16px;
+  padding: 3px 12px;
   color: var(--accent);
-  font-size: 14px;
+  font-size: 12px;
   font-family: 'Tajawal', sans-serif;
   font-weight: 500;
   background: var(--bg-card);
@@ -1504,11 +1627,79 @@ body.light-theme .juz-divider-label {
   text-align-last: center;
   line-height: 2.2;
   font-family: var(--font-quran);
-  font-size: var(--reader-font-size);
+  /* Live variable: DynamicPage sets it while measuring/fitting (even
+     before the mode classes apply) and clears it when the mode is off
+     or infeasible — so normal view always falls back to the slider. */
+  font-size: var(--dynamic-font-size, var(--reader-font-size));
   color: var(--text-main);
   word-spacing: 3px;
   font-feature-settings: "calt" 1, "mark" 1, "mkmk" 1, "kern" 1;
   transition: font-size var(--transition-fast);
+}
+
+/* ==========================================================================
+   Dynamic Page View — each mushaf page fills ~98% of the dynamic viewport.
+   Enabled via .dynamic-page-mode on <html>/<body> (settings toggle).
+   Page height = 98dvh minus measured top/bottom chrome (CSS vars set by JS).
+   ========================================================================== */
+html.dynamic-page-mode {
+  /* mandatory (not proximity): wheel/drag scrolling must always settle
+     on a page start, never rest stranded between two pages. */
+  scroll-snap-type: y mandatory;
+}
+
+body.dynamic-page-mode .page-section {
+  height: 98vh; /* fallback for browsers without dvh support */
+  height: calc(98dvh - var(--fit-top, 140px) - var(--fit-bottom, 0px));
+  min-height: 0;
+  margin-bottom: 4vh; /* dynamic gap between pages (fallback) */
+  margin-bottom: 4dvh; /* ~30px on a 750px viewport, scales with screen */
+  position: relative; /* anchor for the absolute-positioned page divider */
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  scroll-margin-top: var(--fit-top, 140px);
+  overflow-y: auto;
+}
+
+/* Measuring pass: natural content height (JS toggles .dynamic-measuring) */
+html.dynamic-measuring .page-section {
+  height: auto !important;
+  overflow: visible;
+  transition: none !important;
+}
+
+/* Minimized divider, pinned to the BOTTOM of its own page box:
+   absolute positioning takes it out of flow (sections stack flush,
+   snap/observer geometry untouched), so it always renders inside
+   its page instead of bleeding into the next one. Keeps the middle
+   row (page number badge + copy-page button), no top/bottom frame.
+   The font fitter reserves this height (see DynamicPage) so text
+   never runs underneath it.
+   Shared with body.dynamic-dividers-min: the fitter's probe applies
+   ONLY this (never the fixed box heights) so fresh activations measure
+   the same content-only heights as refits. */
+body.dynamic-page-mode .page-divider,
+body.dynamic-dividers-min .page-divider {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 15px;
+  margin: 0;
+  padding: 0;
+  border-top: none;
+  border-bottom: none;
+  min-height: 0;
+}
+
+/* Font slider is bypassed while dynamic page view is on */
+body.dynamic-page-mode #font-size-slider {
+  opacity: 0.4;
+}
+
+.setting-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.8;
 }
 
 /* Scroll to top button */
@@ -1782,7 +1973,7 @@ body.light-theme .juz-divider-label {
   border-color: var(--accent);
 }
 
-.part-dropdown-btn #part-dropdown-label {
+.part-dropdown-btn .part-dropdown-label {
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -2264,13 +2455,25 @@ body.light-theme .part-group-title {
   background: rgba(212, 175, 55, 0.05);
 }
 
+/* Verse play/copy popup — body-level popover (appended to document.body,
+   position:fixed). Always floats ABOVE its verse, horizontally centered,
+   arrow pointing down — the original look. It paints above all reader
+   chrome (header/nav/legend/player are all z ≤ 140) but stays below
+   drawers, toasts and modals.
+   Why a portal and not a bigger z-index inside .verse? Two CSS traps make
+   inner z-index useless: .view-section's transform creates a stacking
+   context (fixed header/nav always win over anything inside it), and
+   .page-section's overflow clips in dynamic page view. Only an element
+   outside those containers can sit above them. */
 .verse-play-popup {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
+  position: fixed;
+  z-index: 180;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  /* JS sets left/top inline; translateX(-50%) centers the bubble on the verse. */
   transform: translateX(-50%);
-  margin-bottom: 8px;
-  z-index: 100;
   animation: popupFadeIn 0.2s ease-out;
 }
 
@@ -2317,12 +2520,14 @@ body.light-theme .part-group-title {
   justify-content: center;
 }
 
-/* Popup arrow */
+/* Popup arrow — always points down at the verse. When the bubble is
+   clamped at a viewport edge, JS sets --arrow-x so the tip still tracks
+   the verse center; otherwise it stays at 50% (the original look). */
 .verse-play-popup::after {
   content: '';
   position: absolute;
   top: 100%;
-  left: 50%;
+  left: var(--arrow-x, 50%);
   transform: translateX(-50%);
   border: 6px solid transparent;
   border-top-color: var(--accent);
@@ -2331,12 +2536,6 @@ body.light-theme .part-group-title {
 /* ==========================================================================
    Verse Copy Button (inside play popup)
    ========================================================================== */
-.verse-play-popup {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .verse-copy-btn {
   display: flex;
   align-items: center;
@@ -2909,6 +3108,12 @@ body.selection-active .verse {
   margin: 0 0 1rem;
 }
 
+.modal-error-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 /* Settings Data Management Group */
 .settings-group-data {
   border-top: 1px solid var(--border-color);
@@ -3008,6 +3213,18 @@ a:focus-visible {
   font-family: var(--font-arabic-ui);
   font-size: 14px;
   padding: 4px 6px 14px;
+}
+
+.search-coverage-note {
+  grid-column: 1/-1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-family: var(--font-arabic-ui);
+  font-size: 13px;
+  margin: 0 0 12px;
 }
 
 .search-result-item {
@@ -4362,6 +4579,29 @@ body.light-theme .memorization-backlog-alert {
   opacity: 0.9;
 }
 
+/* Quick navigation (page + part) centered under the home tabs */
+.home-quick-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 20px;
+  margin-bottom: 22px;
+}
+
+.home-quick-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-arabic-ui);
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.home-quick-field label {
+  white-space: nowrap;
+}
+
 .home-tab-panel {
   display: none;
 }
@@ -4476,16 +4716,36 @@ button.bookmark-row:hover,
 .bookmark-row-goto {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   background: transparent;
   border: none;
   color: inherit;
   font: inherit;
   cursor: pointer;
   padding: 0;
+  min-width: 0;
   text-align: right;
+}
+
+.bookmark-row-preview {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-quran);
+  font-size: 17px;
+  line-height: 1.8;
+  color: var(--text-main);
+  text-align: right;
+}
+
+.bookmark-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .bookmark-row-main {
@@ -4540,6 +4800,17 @@ button.bookmark-row:hover,
   .home-tab {
     padding: 8px 18px;
     font-size: 14px;
+  }
+  .home-quick-nav {
+    gap: 8px 12px;
+    margin-bottom: 18px;
+  }
+  .home-quick-field {
+    font-size: 13px;
+    gap: 6px;
+  }
+  .bookmark-row-preview {
+    font-size: 15px;
   }
   .bookmark-row-time {
     display: none;

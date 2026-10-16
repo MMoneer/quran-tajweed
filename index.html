@@ -127,7 +127,7 @@
           <div class="part-input-wrapper">
             <div class="part-dropdown" id="part-dropdown">
               <button id="part-dropdown-btn" class="part-dropdown-btn" aria-haspopup="listbox" aria-expanded="false">
-                <span id="part-dropdown-label">اختر…</span>
+                <span id="part-dropdown-label" class="part-dropdown-label">اختر…</span>
                 <i class="fa-solid fa-chevron-down part-dropdown-caret"></i>
               </button>
               <div id="part-dropdown-panel" class="part-dropdown-panel" role="listbox">
@@ -165,6 +165,38 @@
             <span>المرجعيات</span>
             <span id="bookmarks-count-badge" class="bookmarks-count-badge"></span>
           </button>
+        </div>
+
+        <!-- Quick navigation: page + part -->
+        <div class="home-quick-nav">
+          <div class="home-quick-field">
+            <label for="home-page-number-input">انتقل للصفحة:</label>
+            <div class="page-input-wrapper">
+              <div class="page-input-field">
+                <input type="number" id="home-page-number-input" min="1" max="604" placeholder="رقم الصفحة">
+                <div class="page-spinner-btns">
+                  <button class="page-spinner-btn" data-dir="up" aria-label="الصفحة التالية"><i class="fa-solid fa-caret-up"></i></button>
+                  <button class="page-spinner-btn" data-dir="down" aria-label="الصفحة السابقة"><i class="fa-solid fa-caret-down"></i></button>
+                </div>
+              </div>
+              <button id="btn-home-go-page" class="btn-icon-small" title="اذهب"><i class="fa-solid fa-arrow-left"></i></button>
+            </div>
+          </div>
+          <div class="home-quick-field">
+            <label for="home-part-dropdown-btn">الأجزاء:</label>
+            <div class="part-input-wrapper">
+              <div class="part-dropdown" id="home-part-dropdown">
+                <button id="home-part-dropdown-btn" class="part-dropdown-btn" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="home-part-dropdown-label" class="part-dropdown-label">اختر…</span>
+                  <i class="fa-solid fa-chevron-down part-dropdown-caret"></i>
+                </button>
+                <div id="home-part-dropdown-panel" class="part-dropdown-panel" role="listbox">
+                  <div id="home-part-dropdown-list" class="part-dropdown-list"></div>
+                </div>
+              </div>
+              <button id="btn-home-go-part" class="btn-icon-small" title="اذهب"><i class="fa-solid fa-arrow-left"></i></button>
+            </div>
+          </div>
         </div>
 
         <div id="tab-panel-surahs" class="home-tab-panel active" role="tabpanel" aria-labelledby="tab-btn-surahs">
@@ -314,10 +346,23 @@
             </div>
 
             <div class="help-card">
+              <h4>عرض الصفحة الديناميكي</h4>
+              <p>يجعل كل صفحة مصحف بارتفاع الشاشة مع ضبط الخط تلقائيًا.</p>
+              <ul>
+                <li>لا يعمل منزلق حجم الخط في هذا الوضع.</li>
+                <li>يُفعَّل تلقائيًا عند كفاية مساحة الشاشة لخط مقروء، ويعود للعرض العادي في الشاشات الصغيرة.</li>
+                <li>التفعيل يعتمد على ارتفاع النافذة لا عرضها، ويُحتسب معه ارتفاع الكروم الظاهر (الهيدر/الشريط العلوي + دليل الألوان والمشغّل السفليان) — أخفِهما إن لزم.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
               <h4>ألوان التجويد</h4>
               <ul>
-                <li><strong>تفعيل/تعطيل:</strong> استخدم المفتاح التبديل لتشغيل أو إيقاف ألوان التجويد.</li>
+                <li><strong>تفعيل/تعطيل:</strong> استخدم المفتاح التبديل لتشغيل أو إيقاف ألوان التجويد. عند الإيقاف تصبح مفاتيح المجموعات والأحكام باهتة لكن حالتها محفوظة.</li>
+                <li><strong>مفتاح المجموعة:</strong> بجانب عنوان كل فئة (المدود، النون والميم، الصفات) يوجد مفتاح مع عدّاد (مثال 3/5) — إطفاؤه يخفي الفئة كاملة، وتشغيله يعيدها كاملة.</li>
+                <li><strong>زر العين لكل حكم:</strong> الدائرة الملونة قبل اسم الحكم هي زر تفعيل — خلفيتها بلون الحكم عند التفعيل، وعين-مشطوبة عند الإطفاء. الحكم المطفأ يظهر بلون النص العادي في المصحف فقط، والدليل يبقى مرجعاً كاملاً.</li>
                 <li><strong>تخصيص الألوان:</strong> يمكنك تغيير لون أي حكم تجويد بالضغط على مربع اللون بجانبه.</li>
+                <li><strong>إظهار الكل:</strong> زر <i class="fa-solid fa-eye"></i> إظهار الكل يعيد كل الأحكام المطفأة دون تغيير ألوانك المخصصة.</li>
                 <li><strong>إعادة الافتراضي:</strong> اضغط <i class="fa-solid fa-arrow-rotate-left"></i> افتراضي لإعادة جميع الألوان إلى قيمها الأصلية.</li>
               </ul>
             </div>
@@ -627,6 +672,13 @@
             </div>
           </div>
           <div class="setting-item flex-between">
+            <label for="toggle-dynamic-page">عرض الصفحة الديناميكي</label>
+            <label class="switch">
+              <input type="checkbox" id="toggle-dynamic-page">
+              <span class="slider round"></span>
+            </label>
+          </div>
+          <div class="setting-item flex-between">
             <label for="toggle-tajweed-active">تفعيل ألوان التجويد</label>
             <label class="switch">
               <input type="checkbox" id="toggle-tajweed-active" checked>
@@ -636,116 +688,148 @@
         </div>
 
         <div class="settings-group">
-          <div class="group-header">
-            <h4>ألوان أحكام التجويد</h4>
-            <button id="btn-reset-colors" class="btn-link" title="استعادة الألوان الافتراضية">
-              <i class="fa-solid fa-arrow-rotate-left"></i> افتراضي
-            </button>
-          </div>
+            <div class="group-header">
+              <h4>ألوان أحكام التجويد</h4>
+              <div class="group-header-actions">
+                <button id="btn-show-all-rules" class="btn-link" title="إظهار جميع الأحكام">
+                  <i class="fa-solid fa-eye"></i> إظهار الكل
+                </button>
+                <button id="btn-reset-colors" class="btn-link" title="استعادة الألوان الافتراضية">
+                  <i class="fa-solid fa-arrow-rotate-left"></i> افتراضي
+                </button>
+              </div>
+            </div>
           
           <!-- Tajweed Rules List -->
           <div class="rules-categories">
             
             <!-- Category: Madd -->
-            <div class="category-panel">
-              <h5 class="category-title"><i class="fa-solid fa-lines-leaning"></i> أحكام المدود</h5>
+            <div class="category-panel" data-category="madd">
+              <div class="category-title-row">
+                <h5 class="category-title"><i class="fa-solid fa-lines-leaning"></i> أحكام المدود</h5>
+                <div class="category-controls">
+                  <span class="category-count" id="count-madd">5/5</span>
+                  <label class="switch switch-small">
+                    <input type="checkbox" id="toggle-group-madd" checked>
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+              </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-madda-normal)"></span>
+                <button class="rule-toggle" data-rule="madda-normal" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل مد طبيعي" style="background-color: var(--color-madda-normal)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-madda-normal">مد طبيعي (حركتان)</label>
                 <input type="color" id="color-madda-normal" data-rule="madda-normal">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-madda-permissible)"></span>
+                <button class="rule-toggle" data-rule="madda-permissible" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل مد العارض" style="background-color: var(--color-madda-permissible)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-madda-permissible">مد العارض للسكون / مد اللين (2 / 4 / 6 حركات)</label>
                 <input type="color" id="color-madda-permissible" data-rule="madda-permissible">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-madda-obligatory-monfasel)"></span>
+                <button class="rule-toggle" data-rule="madda-obligatory-monfasel" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل مد جائز منفصل" style="background-color: var(--color-madda-obligatory-monfasel)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-madda-obligatory-monfasel">مد جائز منفصل (4 / 5 حركات)</label>
                 <input type="color" id="color-madda-obligatory-monfasel" data-rule="madda-obligatory-monfasel">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-madda-obligatory)"></span>
+                <button class="rule-toggle" data-rule="madda-obligatory" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل مد واجب متصل" style="background-color: var(--color-madda-obligatory)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-madda-obligatory">مد واجب متصل (4 / 5 حركات)</label>
                 <input type="color" id="color-madda-obligatory" data-rule="madda-obligatory">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-madda-necessary)"></span>
+                <button class="rule-toggle" data-rule="madda-necessary" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل مد لازم" style="background-color: var(--color-madda-necessary)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-madda-necessary">مد لازم (6 حركات وجوباً)</label>
                 <input type="color" id="color-madda-necessary" data-rule="madda-necessary">
               </div>
             </div>
 
             <!-- Category: Noon & Meem Sakinah -->
-            <div class="category-panel">
-              <h5 class="category-title"><i class="fa-solid fa-comment-nodes"></i> أحكام النون والميم الساكنة والتنوين</h5>
+            <div class="category-panel" data-category="noon">
+              <div class="category-title-row">
+                <h5 class="category-title"><i class="fa-solid fa-comment-nodes"></i> أحكام النون والميم الساكنة والتنوين</h5>
+                <div class="category-controls">
+                  <span class="category-count" id="count-noon">7/7</span>
+                  <label class="switch switch-small">
+                    <input type="checkbox" id="toggle-group-noon" checked>
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+              </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-ghunnah)"></span>
+                <button class="rule-toggle" data-rule="ghunnah" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل غنة" style="background-color: var(--color-ghunnah)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-ghunnah">غنة</label>
                 <input type="color" id="color-ghunnah" data-rule="ghunnah">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-ikhafa)"></span>
+                <button class="rule-toggle" data-rule="ikhafa" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل إخفاء" style="background-color: var(--color-ikhafa)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-ikhafa">إخفاء</label>
                 <input type="color" id="color-ikhafa" data-rule="ikhafa">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-ikhafa-shafawi)"></span>
+                <button class="rule-toggle" data-rule="ikhafa-shafawi" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل إخفاء شفوي" style="background-color: var(--color-ikhafa-shafawi)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-ikhafa-shafawi">إخفاء شفوي</label>
                 <input type="color" id="color-ikhafa-shafawi" data-rule="ikhafa-shafawi">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-idgham-ghunnah)"></span>
+                <button class="rule-toggle" data-rule="idgham-ghunnah" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل إدغام بغنة" style="background-color: var(--color-idgham-ghunnah)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-idgham-ghunnah">إدغام بغنة</label>
                 <input type="color" id="color-idgham-ghunnah" data-rule="idgham-ghunnah">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-idgham-shafawi)"></span>
+                <button class="rule-toggle" data-rule="idgham-wo-ghunnah" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل إدغام بلا غنة" style="background-color: var(--color-idgham-wo-ghunnah)"><i class="fa-solid fa-eye"></i></button>
+                <label for="color-idgham-wo-ghunnah">إدغام بلا غنة</label>
+                <input type="color" id="color-idgham-wo-ghunnah" data-rule="idgham-wo-ghunnah">
+              </div>
+              <div class="rule-color-item">
+                <button class="rule-toggle" data-rule="idgham-shafawi" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل إدغام شفوي" style="background-color: var(--color-idgham-shafawi)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-idgham-shafawi">إدغام شفوي</label>
                 <input type="color" id="color-idgham-shafawi" data-rule="idgham-shafawi">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-iqlab)"></span>
+                <button class="rule-toggle" data-rule="iqlab" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل إقلاب" style="background-color: var(--color-iqlab)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-iqlab">إقلاب</label>
                 <input type="color" id="color-iqlab" data-rule="iqlab">
               </div>
             </div>
 
             <!-- Category: Pronunciations & Silent Letters -->
-            <div class="category-panel">
-              <h5 class="category-title"><i class="fa-solid fa-volume-low"></i> مخارج الحروف والإدغام الآخر</h5>
+            <div class="category-panel" data-category="pronounce">
+              <div class="category-title-row">
+                <h5 class="category-title"><i class="fa-solid fa-volume-low"></i> صفات الحروف وأحكام أخرى</h5>
+                <div class="category-controls">
+                  <span class="category-count" id="count-pronounce">6/6</span>
+                  <label class="switch switch-small">
+                    <input type="checkbox" id="toggle-group-pronounce" checked>
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+              </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-qalaqah)"></span>
+                <button class="rule-toggle" data-rule="qalaqah" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل قلقلة" style="background-color: var(--color-qalaqah)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-qalaqah">قلقلة</label>
                 <input type="color" id="color-qalaqah" data-rule="qalaqah">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-tafkhim)"></span>
+                <button class="rule-toggle" data-rule="tafkhim" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل تفخيم" style="background-color: var(--color-tafkhim)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-tafkhim">تفخيم</label>
                 <input type="color" id="color-tafkhim" data-rule="tafkhim">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-idgham-wo-ghunnah)"></span>
-                <label for="color-idgham-wo-ghunnah">إدغام بلا غنة</label>
-                <input type="color" id="color-idgham-wo-ghunnah" data-rule="idgham-wo-ghunnah">
-              </div>
-              <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-idgham-mutajanisayn)"></span>
+                <button class="rule-toggle" data-rule="idgham-mutajanisayn" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل إدغام متجانسين" style="background-color: var(--color-idgham-mutajanisayn)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-idgham-mutajanisayn">إدغام متجانسين</label>
                 <input type="color" id="color-idgham-mutajanisayn" data-rule="idgham-mutajanisayn">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-ham-wasl)"></span>
+                <button class="rule-toggle" data-rule="ham-wasl" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل همزة وصل" style="background-color: var(--color-ham-wasl)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-ham-wasl">همزة وصل</label>
                 <input type="color" id="color-ham-wasl" data-rule="ham-wasl">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-laam-shamsiyah)"></span>
+                <button class="rule-toggle" data-rule="laam-shamsiyah" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل لام شمسية" style="background-color: var(--color-laam-shamsiyah)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-laam-shamsiyah">لام شمسية</label>
                 <input type="color" id="color-laam-shamsiyah" data-rule="laam-shamsiyah">
               </div>
               <div class="rule-color-item">
-                <span class="rule-dot" style="background-color: var(--color-slnt)"></span>
+                <button class="rule-toggle" data-rule="slnt" title="تفعيل/إطفاء اللون" aria-pressed="true" aria-label="تفعيل حرف صامت" style="background-color: var(--color-slnt)"><i class="fa-solid fa-eye"></i></button>
                 <label for="color-slnt">حرف صامت</label>
                 <input type="color" id="color-slnt" data-rule="slnt">
               </div>
@@ -831,7 +915,10 @@
 
         <div id="wizard-error-area" class="modal-error-area" style="display: none;">
           <p id="wizard-error-text" class="modal-error-text"></p>
-          <button id="btn-wizard-retry" class="modal-btn modal-btn-primary">إعادة المحاولة</button>
+          <div class="modal-error-actions">
+            <button id="btn-wizard-retry" class="modal-btn modal-btn-primary">إعادة المحاولة</button>
+            <button id="btn-wizard-continue" class="modal-btn modal-btn-secondary" style="display: none;">المتابعة</button>
+          </div>
         </div>
       </div>
     </div>
@@ -855,10 +942,12 @@
   <script src="js/version.js"></script>
   <script src="data/juz-data.js"></script>
   <script src="js/hizbQuarterData.js"></script>
+  <script src="js/versePreview.js"></script>
   <script src="js/dataStore.js"></script>
   <script src="js/dataImporter.js"></script>
   <script src="js/api.js"></script>
   <script src="js/settings.js"></script>
+  <script src="js/dynamicPage.js"></script>
   <script src="js/search.js"></script>
   <script src="js/surahIndex.js"></script>
   <script src="js/pageRenderer.js"></script>

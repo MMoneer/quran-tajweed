@@ -158,7 +158,10 @@ const QuranAPI = (() => {
   }
 
   /**
-   * Load surah data — IndexedDB first, then fetch from API or legacy script tag.
+   * Load surah data — IndexedDB first, then fetch from the API.
+   * The API fallback works in both modes and persists to IndexedDB;
+   * it replaces the legacy data/{id}.js script fallback, whose files
+   * are no longer shipped.
    * @param {number} surahId Surah ID (1-114)
    * @returns {Promise<Object>} Surah data with verses and page_breaks
    */
@@ -171,34 +174,19 @@ const QuranAPI = (() => {
       console.warn(`IndexedDB getSurah(${surahId}) failed:`, e);
     }
 
-    // 2. Online-only mode: fetch from API (saves to IndexedDB for next time)
-    if (localStorage.getItem('quran_online_only') === 'true') {
-      return fetchSurahOnline(surahId);
+    // 2. Not stored locally — fetch from the API (saves to IndexedDB)
+    try {
+      return await fetchSurahOnline(surahId);
+    } catch (e) {
+      console.warn(`Surah ${surahId} missing locally and API fetch failed:`, e);
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      const err = new Error(offline
+        ? 'هذه السورة غير محفوظة على جهازك وأنت غير متصل بالإنترنت.'
+        : 'هذه السورة غير محفوظة على جهازك وتعذر جلبها من الخادم.');
+      err.code = 'SURAH_NOT_AVAILABLE';
+      err.offline = offline;
+      throw err;
     }
-
-    // 3. Fallback: load via <script> tag (legacy bundled data)
-    const varName = `_sd_${surahId}`;
-    if (window[varName]) {
-      return window[varName];
-    }
-
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = `data/${surahId}.js`;
-      script.onload = () => {
-        if (window[varName]) {
-          resolve(window[varName]);
-        } else {
-          reject(new Error(`Variable ${varName} not found after loading script`));
-        }
-        script.remove();
-      };
-      script.onerror = () => {
-        script.remove();
-        reject(new Error(`Failed to load data/${surahId}.js`));
-      };
-      document.head.appendChild(script);
-    });
   }
 
   /**

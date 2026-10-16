@@ -301,8 +301,13 @@ const PageRenderer = (() => {
         }
       }
 
-      html += `</div>`;
+      // Divider is the LAST CHILD of its own page section (not a sibling):
+      // in dynamic mode it is absolutely positioned at the page-box
+      // bottom, and absolute positioning anchors to ANCESTORS only —
+      // as a sibling it would anchor to the whole reader card and pile
+      // all dividers at the surah end. No flex involved (block layout).
       html += createPageDividerHTML(currentPageNumber);
+      html += `</div>`;
     }
 
     // Insert all HTML in one DOM operation

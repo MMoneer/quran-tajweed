@@ -28,6 +28,7 @@ const SettingsManager = (() => {
     theme: 'dark', // 'dark' or 'light'
     tajweedActive: true,
     reciter: 'Minshawy_Murattal_128kbps',
+    dynamicPage: false, // dynamic mushaf page view: each page ~98dvh with auto-fit font
     fontSize: 30, // px (default for desktop/tablet)
     // Font sizes per media type
     fontSizes: {
@@ -35,6 +36,13 @@ const SettingsManager = (() => {
       tablet: 30,  // 768px - 1100px
       desktop: 30  // > 1100px
     }
+  };
+
+  // Rule IDs per settings category panel (must match data-category in index.html)
+  const CATEGORY_RULES = {
+    madd: ['madda-normal', 'madda-permissible', 'madda-obligatory-monfasel', 'madda-obligatory', 'madda-necessary'],
+    noon: ['ghunnah', 'ikhafa', 'ikhafa-shafawi', 'idgham-ghunnah', 'idgham-wo-ghunnah', 'idgham-shafawi', 'iqlab'],
+    pronounce: ['qalaqah', 'tafkhim', 'idgham-mutajanisayn', 'ham-wasl', 'laam-shamsiyah', 'slnt']
   };
 
   // Media breakpoints
@@ -119,6 +127,9 @@ const SettingsManager = (() => {
     { id: 'idgham-ghunnah', ar: 'إدغام بغنة', en: 'Idgham with Ghunnah', cat: 'noon',
       def: 'إدغام النون الساكنة والتنوين في حروف (ينمو) مع غنة.',
       example: { before: 'مَ', target: 'ن ي', after: 'َعمَل' } },
+    { id: 'idgham-wo-ghunnah', ar: 'إدغام بلا غنة', en: 'Idgham without Ghunnah', cat: 'noon',
+      def: 'إدغام النون الساكنة والتنوين في اللام والراء بلا غنة.',
+      example: { before: 'مِ', target: 'ن رّ', after: 'َبِّهِم' } },
     { id: 'idgham-shafawi', ar: 'إدغام شفوي', en: 'Idgham Shafawi', cat: 'noon',
       def: 'إدغام الميم الساكنة في الميم مع غنة.',
       example: { before: 'لَهُ', target: 'م مّ', after: 'َا' } },
@@ -132,9 +143,6 @@ const SettingsManager = (() => {
     { id: 'tafkhim', ar: 'تفخيم', en: 'Tafkhim', cat: 'pronounce',
       def: 'تسمين الحرف بحيث يمتلئ الفم بصداه (حروف الاستعلاء والراء المفخّمة).',
       example: { before: '', target: 'رَ', after: 'بِّ' } },
-    { id: 'idgham-wo-ghunnah', ar: 'إدغام بلا غنة', en: 'Idgham without Ghunnah', cat: 'pronounce',
-      def: 'إدغام النون الساكنة والتنوين في اللام والراء بلا غنة.',
-      example: { before: 'مِ', target: 'ن رّ', after: 'َبِّهِم' } },
     { id: 'idgham-mutajanisayn', ar: 'إدغام متجانسين', en: 'Idgham Mutajanisayn', cat: 'pronounce',
       def: 'إدغام حرفين اتحدا مخرجاً واختلفا صفة.',
       example: { before: 'قَ', target: 'د تّ', after: 'َبَيَّنَ' } },
@@ -152,7 +160,9 @@ const SettingsManager = (() => {
   // State
   let state = {
     colors: { ...DEFAULT_COLORS },
-    settings: { ...DEFAULT_SETTINGS }
+    settings: { ...DEFAULT_SETTINGS },
+    // ruleId -> true means DISABLED (falls back to plain text color in reader only)
+    disabledRules: {}
   };
 
   /**
@@ -235,6 +245,7 @@ const SettingsManager = (() => {
   function loadFromLocalStorage() {
     const savedColors = localStorage.getItem('tajweed_custom_colors');
     const savedSettings = localStorage.getItem('tajweed_app_settings');
+    const savedDisabled = localStorage.getItem('tajweed_disabled_rules');
 
     if (savedColors) {
       try {
@@ -256,6 +267,19 @@ const SettingsManager = (() => {
         console.error('Error parsing app settings:', e);
       }
     }
+
+    if (savedDisabled) {
+      try {
+        const parsed = JSON.parse(savedDisabled);
+        // Keep only known rule IDs so stale keys never linger
+        state.disabledRules = {};
+        Object.keys(DEFAULT_COLORS).forEach(rule => {
+          if (parsed[rule] === true) state.disabledRules[rule] = true;
+        });
+      } catch (e) {
+        console.error('Error parsing disabled rules:', e);
+      }
+    }
   }
 
   /**
@@ -263,6 +287,10 @@ const SettingsManager = (() => {
    */
   function saveColorsToLocalStorage() {
     localStorage.setItem('tajweed_custom_colors', JSON.stringify(state.colors));
+  }
+
+  function saveDisabledRulesToLocalStorage() {
+    localStorage.setItem('tajweed_disabled_rules', JSON.stringify(state.disabledRules));
   }
 
   function saveSettingsToLocalStorage() {
@@ -283,10 +311,10 @@ const SettingsManager = (() => {
         input.value = state.colors[rule];
       }
 
-      // Update color dots in Settings Panel
-      const dot = input?.previousElementSibling?.previousElementSibling;
-      if (dot && dot.classList.contains('rule-dot')) {
-        dot.style.backgroundColor = state.colors[rule];
+      // Update per-rule eye toggle background (it doubles as color preview)
+      const toggleBtn = document.querySelector(`.rule-toggle[data-rule="${rule}"]`);
+      if (toggleBtn && !toggleBtn.classList.contains('off')) {
+        toggleBtn.style.backgroundColor = state.colors[rule];
       }
     });
 
@@ -336,6 +364,107 @@ const SettingsManager = (() => {
       document.body.classList.remove('light-theme');
       document.getElementById('btn-theme').innerHTML = '<i class="fa-solid fa-moon"></i>';
     }
+
+    // Apply dynamic page view mode (mushaf page ~98dvh + auto-fit font)
+    applyDynamicPageMode();
+
+    // Apply per-rule / per-group enable states (reader text only)
+    applyRuleVisibilityToDOM();
+  }
+
+  /**
+   * Hierarchical enable/disable for tajweed colors (reader text only).
+   * Master (tajweedActive) > group switch > per-rule eye button.
+   * Disabled = plain text color (inherit). Legend + rules page stay intact.
+   */
+  function isRuleEnabled(ruleId) {
+    return !state.disabledRules[ruleId];
+  }
+
+  function getGroupCount(category) {
+    const rules = CATEGORY_RULES[category] || [];
+    const enabled = rules.filter(r => isRuleEnabled(r)).length;
+    return { enabled, total: rules.length };
+  }
+
+  function applyRuleVisibilityToDOM() {
+    // Body classes drive the CSS overrides (text only, legend untouched)
+    Object.keys(DEFAULT_COLORS).forEach(rule => {
+      document.body.classList.toggle(`tajweed-off-${rule}`, !isRuleEnabled(rule));
+    });
+
+    // Per-rule buttons + rows
+    document.querySelectorAll('.rule-toggle[data-rule]').forEach(btn => {
+      const rule = btn.getAttribute('data-rule');
+      const enabled = isRuleEnabled(rule);
+      btn.classList.toggle('off', !enabled);
+      btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+      btn.innerHTML = `<i class="fa-solid ${enabled ? 'fa-eye' : 'fa-eye-slash'}"></i>`;
+      if (enabled && state.colors[rule]) {
+        btn.style.backgroundColor = state.colors[rule];
+      } else {
+        btn.style.backgroundColor = '';
+      }
+      const row = btn.closest('.rule-color-item');
+      if (row) row.classList.toggle('disabled', !enabled);
+      const picker = document.getElementById(`color-${rule}`);
+      if (picker) picker.disabled = !enabled;
+    });
+
+    // Group switches + counters
+    Object.keys(CATEGORY_RULES).forEach(cat => {
+      const { enabled, total } = getGroupCount(cat);
+      const toggle = document.getElementById(`toggle-group-${cat}`);
+      if (toggle) toggle.checked = enabled > 0;
+      const count = document.getElementById(`count-${cat}`);
+      if (count) count.textContent = `${enabled}/${total}`;
+    });
+
+    // Master OFF dims the whole section (states preserved, not cleared)
+    const masterOn = !!state.settings.tajweedActive;
+    document.querySelector('.rules-categories')?.classList.toggle('master-off', !masterOn);
+  }
+
+  function setRuleEnabled(ruleId, enabled) {
+    if (enabled) delete state.disabledRules[ruleId];
+    else state.disabledRules[ruleId] = true;
+    saveDisabledRulesToLocalStorage();
+    applyRuleVisibilityToDOM();
+  }
+
+  function setGroupEnabled(category, enabled) {
+    (CATEGORY_RULES[category] || []).forEach(rule => {
+      if (enabled) delete state.disabledRules[rule];
+      else state.disabledRules[rule] = true;
+    });
+    saveDisabledRulesToLocalStorage();
+    applyRuleVisibilityToDOM();
+  }
+
+  function showAllRules() {
+    state.disabledRules = {};
+    saveDisabledRulesToLocalStorage();
+    applyRuleVisibilityToDOM();
+  }
+
+  /**
+   * Sync the dynamic-page-view toggle UI. The mode CLASSES (effective
+   * state) are owned by the DynamicPage module, which auto-degrades to
+   * normal view on viewports too small to fit a readable font.
+   */
+  function applyDynamicPageMode() {
+    const on = !!state.settings.dynamicPage;
+    const toggle = document.getElementById('toggle-dynamic-page');
+    if (toggle) toggle.checked = on;
+    if (typeof DynamicPage !== 'undefined') {
+      DynamicPage.refreshControls();
+      DynamicPage.refit();
+    } else {
+      document.body.classList.toggle('dynamic-page-mode', on);
+      document.documentElement.classList.toggle('dynamic-page-mode', on);
+      const slider = document.getElementById('font-size-slider');
+      if (slider) slider.disabled = on;
+    }
   }
 
   /**
@@ -375,10 +504,10 @@ const SettingsManager = (() => {
         // Dynamic DOM Updates
         document.documentElement.style.setProperty(`--color-${rule.id}`, val);
 
-        // Update local dot color
-        const dot = input.closest('.rule-color-item')?.querySelector('.rule-dot');
-        if (dot) {
-          dot.style.backgroundColor = val;
+        // Update eye toggle preview (it doubles as color preview when enabled)
+        const toggleBtn = input.closest('.rule-color-item')?.querySelector('.rule-toggle');
+        if (toggleBtn && !toggleBtn.classList.contains('off')) {
+          toggleBtn.style.backgroundColor = val;
         }
 
         // Update corresponding dot in legend
@@ -393,9 +522,32 @@ const SettingsManager = (() => {
       input?.addEventListener('change', onPickerChange);
     });
 
+    // Per-rule eye toggles
+    document.querySelectorAll('.rule-toggle[data-rule]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!state.settings.tajweedActive) return;
+        const rule = btn.getAttribute('data-rule');
+        setRuleEnabled(rule, !isRuleEnabled(rule));
+      });
+    });
+
+    // Per-group switches (checked = at least one rule on; OFF sets all off, ON sets all on)
+    Object.keys(CATEGORY_RULES).forEach(cat => {
+      document.getElementById(`toggle-group-${cat}`)?.addEventListener('change', (e) => {
+        setGroupEnabled(cat, e.target.checked);
+      });
+    });
+
+    // Show-all restores every rule without touching custom colors
+    document.getElementById('btn-show-all-rules')?.addEventListener('click', () => {
+      showAllRules();
+    });
+
     // Font size slider
     const sizeSlider = document.getElementById('font-size-slider');
     sizeSlider?.addEventListener('input', (e) => {
+      // Bypassed while dynamic page view controls the font size itself
+      if (state.settings.dynamicPage) return;
       const val = parseInt(e.target.value);
       state.settings.fontSize = val;
       document.documentElement.style.setProperty('--reader-font-size', `${val}px`);
@@ -421,6 +573,16 @@ const SettingsManager = (() => {
         document.body.classList.remove('tajweed-active');
       }
       saveSettingsToLocalStorage();
+      applyRuleVisibilityToDOM();
+    });
+
+    // Dynamic page view toggle (mushaf page ~98dvh + auto-fit font)
+    const toggleDynamic = document.getElementById('toggle-dynamic-page');
+    toggleDynamic?.addEventListener('change', (e) => {
+      state.settings.dynamicPage = e.target.checked;
+      applyDynamicPageMode();
+      saveSettingsToLocalStorage();
+      if (typeof DynamicPage !== 'undefined') DynamicPage.refit();
     });
 
     // Theme toggle
@@ -549,8 +711,12 @@ const SettingsManager = (() => {
 
     // Re-fetch data button
     const btnRefetch = document.getElementById('btn-refetch-data');
+    let refetchHideTimer = null;
     btnRefetch?.addEventListener('click', () => {
       if (!confirm('هل تريد إعادة تحميل جميع بيانات القرآن؟ قد يستغرق هذا بضع دقائق.')) return;
+
+      // Cancel a previous run's pending hide so it can't hide this run's bar
+      clearTimeout(refetchHideTimer);
 
       const progressArea = document.getElementById('refetch-progress-area');
       const progressFill = document.getElementById('refetch-progress-fill');
@@ -564,9 +730,16 @@ const SettingsManager = (() => {
           progressText.textContent = `جاري التحميل... ${progress.current}/${progress.total}`;
         },
         (result) => {
-          progressText.textContent = `اكتمل التحميل! ${result.success} سورة.`;
+          if (result.success === 0) {
+            progressText.textContent = `تعذر تحميل أي سورة (${result.failed}/114) — تحقق من اتصالك بالإنترنت ثم أعد المحاولة.`;
+          } else if (result.failed > 0) {
+            progressText.textContent = `اكتمل التحميل! ${result.success} سورة، وتعذر تحميل ${result.failed} سورة — أعد المحاولة لإكمالها.`;
+          } else {
+            progressText.textContent = `اكتمل التحميل! ${result.success} سورة.`;
+          }
           progressFill.style.width = '100%';
-          setTimeout(() => { progressArea.style.display = 'none'; }, 3000);
+          const delay = result.failed > 0 ? 8000 : 3000;
+          refetchHideTimer = setTimeout(() => { progressArea.style.display = 'none'; }, delay);
         },
         (error) => {
           progressText.textContent = `حدث خطأ: ${error.message}`;
@@ -587,6 +760,7 @@ const SettingsManager = (() => {
         state.settings.fontSize = getFontSizeForMedia(currentMedia);
         applySettingsToDOM();
         saveSettingsToLocalStorage();
+        if (typeof DynamicPage !== 'undefined') DynamicPage.refit();
       }
     };
 
@@ -672,7 +846,13 @@ const SettingsManager = (() => {
     init,
     state,
     RULES_META,
+    CATEGORY_RULES,
     applySettingsToDOM,
+    applyRuleVisibilityToDOM,
+    isRuleEnabled,
+    setRuleEnabled,
+    setGroupEnabled,
+    showAllRules,
     generateLegend
   };
 })();

@@ -6,7 +6,7 @@ const TajweedRules = (() => {
   const CATEGORIES = [
     { key: 'madd', title: 'أحكام المدود', icon: 'fa-lines-leaning' },
     { key: 'noon', title: 'أحكام النون والميم الساكنة والتنوين', icon: 'fa-comment-nodes' },
-    { key: 'pronounce', title: 'مخارج الحروف والإدغام', icon: 'fa-volume-low' }
+    { key: 'pronounce', title: 'صفات الحروف وأحكام أخرى', icon: 'fa-volume-low' }
   ];
 
   const MADD_DURATIONS = [

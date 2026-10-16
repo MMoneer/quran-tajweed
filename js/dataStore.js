@@ -19,6 +19,14 @@ const DataStore = (() => {
         const database = event.target.result;
         const oldVersion = event.oldVersion;
 
+        // Destructive helper — see migration policy at the bottom of this handler.
+        const recreateStore = (name, keyPath) => {
+          if (database.objectStoreNames.contains(name)) {
+            database.deleteObjectStore(name);
+          }
+          database.createObjectStore(name, { keyPath });
+        };
+
         if (!database.objectStoreNames.contains('chapters')) {
           database.createObjectStore('chapters', { keyPath: 'id' });
         }
@@ -31,24 +39,26 @@ const DataStore = (() => {
 
         // v3: invalidate search index (entries now carry normalizedAlt)
         if (oldVersion < 3) {
-          if (database.objectStoreNames.contains('search_index')) {
-            database.deleteObjectStore('search_index');
-          }
-          database.createObjectStore('search_index', { keyPath: 'surah_id' });
+          recreateStore('search_index', 'surah_id');
         }
 
         // v4: search now uses text_imlaei_simple + new normalization.
-        // Cached surahs (no imlaei field) and old index are invalid, so wipe both.
+        // v3-era cached surahs lack text_imlaei_simple, so the verse records
+        // themselves are invalid, not just the index — hence both are wiped.
         if (oldVersion < 4) {
-          if (database.objectStoreNames.contains('search_index')) {
-            database.deleteObjectStore('search_index');
-          }
-          database.createObjectStore('search_index', { keyPath: 'surah_id' });
-          if (database.objectStoreNames.contains('surahs')) {
-            database.deleteObjectStore('surahs');
-          }
-          database.createObjectStore('surahs', { keyPath: 'surah_id' });
+          recreateStore('search_index', 'surah_id');
+          recreateStore('surahs', 'surah_id');
         }
+
+        // ── Migration policy for future DB_VERSION bumps (5+) ──────────────
+        // Deleting `surahs` forces every user to re-download ~96 MB of Quran
+        // data — unrecoverable while offline, painful on metered connections.
+        // Default for any new bump: invalidate ONLY search_index, which is
+        // rebuildable lazily from whatever surahs are stored locally
+        // (recreateStore('search_index', 'surah_id')).
+        // Never delete `surahs` unless the stored verse record schema itself
+        // changed; if it must, say so in the release notes first so users
+        // know a full re-download is coming.
       };
 
       request.onsuccess = (event) => {

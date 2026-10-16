@@ -5,13 +5,17 @@ const DataImporter = (() => {
   const BASE_URL = 'https://api.quran.com/api/v4';
   let isImporting = false;
   let abortController = null;
+  // Session token: bumped on cancel and on each start, so a cancelled (dying)
+  // loop's finally can never clobber the state of a newer import.
+  let sessionCounter = 0;
 
   /**
    * Import the chapters list from API and save to DataStore
+   * @param {AbortSignal} [signal]
    * @returns {Promise<Array>}
    */
-  async function importChapterList() {
-    const resp = await fetch(`${BASE_URL}/chapters`);
+  async function importChapterList(signal) {
+    const resp = await fetch(`${BASE_URL}/chapters`, { signal });
     if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
     const data = await resp.json();
     await DataStore.saveChapters(data.chapters);
@@ -111,6 +115,7 @@ const DataImporter = (() => {
   async function startImport(onProgress, onComplete, onError) {
     if (isImporting) return;
     isImporting = true;
+    const session = ++sessionCounter;
     abortController = new AbortController();
     const signal = abortController.signal;
 
@@ -125,7 +130,7 @@ const DataImporter = (() => {
     let failed = 0;
 
     try {
-      const chaptersList = await importChapterList();
+      const chaptersList = await importChapterList(signal);
       const chaptersMap = {};
       for (const ch of chaptersList) {
         chaptersMap[ch.id] = ch;
@@ -135,12 +140,14 @@ const DataImporter = (() => {
         if (signal.aborted) break;
 
         const meta = chaptersMap[surahId];
-        onProgress({
-          current: surahId,
-          total: 114,
-          surahId,
-          name: meta?.name_arabic || ''
-        });
+        if (session === sessionCounter) {
+          onProgress({
+            current: surahId,
+            total: 114,
+            surahId,
+            name: meta?.name_arabic || ''
+          });
+        }
 
         const result = await importSingleSurah(surahId, signal, meta);
         if (result) {
@@ -158,23 +165,29 @@ const DataImporter = (() => {
         onComplete({ success, failed, skipped: 0 });
       }
     } catch (err) {
-      if (err.name !== 'AbortError') {
+      if (err.name !== 'AbortError' && session === sessionCounter) {
         onError(err);
       }
     } finally {
-      isImporting = false;
-      abortController = null;
+      if (session === sessionCounter) {
+        isImporting = false;
+        abortController = null;
+      }
     }
   }
 
   /**
-   * Cancel the ongoing import
+   * Cancel the ongoing import. Clears the guard immediately so a retry can
+   * start right away; the dying loop's finally is session-guarded and will
+   * not touch the new import's state.
    */
   function cancelImport() {
     if (abortController) {
       abortController.abort();
     }
+    abortController = null;
     isImporting = false;
+    sessionCounter++;
   }
 
   return {

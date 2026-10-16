@@ -58,6 +58,10 @@ const App = (() => {
         FirstRunWizard.hide();
         continueInit();
       });
+      FirstRunWizard.onContinue(() => {
+        FirstRunWizard.hide();
+        init();
+      });
       return;
     }
 
@@ -74,6 +78,21 @@ const App = (() => {
         FirstRunWizard.updateProgress(progress.current, progress.total, progress.name);
       },
       (result) => {
+        if (result.failed > 0) {
+          if (result.success === 0) {
+            FirstRunWizard.showError(
+              `تعذر تحميل أي سورة (${result.failed}/114) — تحقق من اتصالك بالإنترنت ثم أعد المحاولة.`
+            );
+          } else {
+            FirstRunWizard.showError(
+              `تم تحميل ${result.success} من ${result.success + result.failed} سورة، ` +
+              `وتعذر تحميل ${result.failed} سورة. يمكنك إعادة المحاولة، ` +
+              `أو المتابعة وإعادة التحميل لاحقًا من الإعدادات.`,
+              true
+            );
+          }
+          return;
+        }
         FirstRunWizard.hide();
         init();
       },
@@ -90,6 +109,9 @@ const App = (() => {
     // 1. Initialize settings & customization values
     SettingsManager.init();
 
+    // 1b. Initialize dynamic page view (resize/overlay observers; no-op unless enabled)
+    if (typeof DynamicPage !== 'undefined') DynamicPage.init();
+
     // 2. Initialize Audio Player
     AudioPlayer.init();
 
@@ -105,7 +127,16 @@ const App = (() => {
       }
     }
 
-    // 3c. Initialize Memorization view (loads persisted state from IndexedDB,
+    // 3c. Home quick-nav (page + part jump fields under the tabs)
+    if (typeof SurahViewer !== 'undefined' && SurahViewer.setupHomeQuickNav) {
+      try {
+        SurahViewer.setupHomeQuickNav();
+      } catch (e) {
+        console.error('SurahViewer.setupHomeQuickNav failed:', e);
+      }
+    }
+
+    // 3d. Initialize Memorization view (loads persisted state from IndexedDB,
     //     warms caches). MUST be awaited before setupRouter() so the initial
     //     route handler can call MemorizationView.render() with state loaded.
     if (typeof MemorizationView !== 'undefined') {
