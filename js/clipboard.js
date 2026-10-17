@@ -153,14 +153,19 @@ const VerseClipboard = (() => {
     }
     toast.textContent = message;
 
-    // Stack above selection bar or audio player if present
+    // Stack above selection bar or audio player if present.
+    // Immersive bottom tray: hidden behind ImmersiveReader body classes —
+    // only an OPEN tray pushes the toast up.
     let bottom = 24;
     const bar = document.getElementById('selection-bar');
     if (bar && bar.parentNode) {
       bottom = (parseInt(bar.style.bottom, 10) || 24) + bar.offsetHeight + 12;
     } else {
       const ap = document.querySelector('.audio-player.visible');
-      if (ap) bottom = ap.offsetHeight + 16;
+      const trayOpen =
+        !document.body.classList.contains('immersive-read') ||
+        document.body.classList.contains('immersive-bottom-open');
+      if (ap && trayOpen) bottom = ap.offsetHeight + 16;
     }
     toast.style.bottom = `${bottom}px`;
 

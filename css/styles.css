@@ -66,6 +66,15 @@
   --transition-slow: 0.5s ease;
   
   --reader-font-size: 30px;
+
+  /* Layout metrics shared across modes — mode rules must reference these
+     tokens, never inline magic numbers (single source of truth).
+     --immersive-edge is ALSO read by js/immersiveReader.js via computed
+     style (JS fallback: nearest 12px default if the var is missing). */
+  --app-pad: 24px;            /* app-main gutter */
+  --sv-card-pad: 40px;        /* surah-viewer-card frame padding */
+  --immersive-edge: 12px;     /* pointer band near an edge that reveals hidden chrome */
+  --immersive-guard: 0.5dvh;  /* breathing gap keeping the previous opening's tail offscreen */
 }
 
 /* Light Theme overrides */
@@ -164,7 +173,7 @@ a {
 
 .app-main {
   flex: 1;
-  padding: 24px;
+  padding: var(--app-pad, 24px);
   max-width: 1300px;
   width: 100%;
   margin: 80px auto 0 auto;
@@ -740,7 +749,7 @@ body.light-theme .btn-close:hover {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 24px;
-  padding: 40px;
+  padding: var(--sv-card-pad, 40px);
   min-height: 400px;
   box-shadow: var(--shadow-md);
   position: relative;
@@ -1694,6 +1703,291 @@ body.dynamic-dividers-min .page-divider {
 /* Font slider is bypassed while dynamic page view is on */
 body.dynamic-page-mode #font-size-slider {
   opacity: 0.4;
+}
+
+/* ==========================================================================
+   Two-page spread view — mushaf opening on wide screens (body.spread-mode).
+   Pairing is fixed: [1,2] [3,4] … right page (odd) first in DOM, which RTL
+   renders on the right. Spread requires the auto-fit (dynamic-page-mode);
+   enabling it forces the fitter on (settings enforce this).
+   ========================================================================== */
+.spread-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 28px;
+  align-items: stretch;
+  position: relative;
+  scroll-margin-top: 140px;
+  margin-bottom: 24px;
+}
+/* Center fold line */
+.spread-row::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 50%;
+  width: 1px;
+  background: var(--border-color);
+  pointer-events: none;
+}
+body.spread-mode .spread-row > .page-section {
+  min-width: 0;
+  scroll-margin-top: 0;
+}
+/* The reader canvas is capped at 1300px by default, which keeps the two
+   columns narrow no matter how wide the screen is — so the auto-fit could
+   never reach a readable size on ANY display. Widen the canvas for the
+   spread so each column gets real width (and needs less height). */
+@media (min-width: 768px) {
+  body.spread-mode .app-main,
+  body.spread-mode .app-header .header-content,
+  body.spread-mode .fixed-nav-inner {
+    max-width: min(2000px, 96vw);
+  }
+}
+/* Parallel ends — used when NOT auto-fitting (spread + dynamic sizes
+   itself below). Both pages share one height (= the taller) and each
+   divider is pinned to the same bottom baseline, like a real opening. */
+@media (min-width: 768px) {
+  body.spread-mode:not(.dynamic-page-mode) .spread-row > .page-section,
+  body.spread-mode:not(.dynamic-page-mode) .spread-row > .spread-placeholder {
+    position: relative;
+    padding-bottom: 150px;
+  }
+  body.spread-mode:not(.dynamic-page-mode) .spread-row > .page-section .page-divider {
+    position: absolute;
+    left: 20px;
+    right: 20px;
+    bottom: 20px;
+    margin: 0;
+  }
+}
+/* Spread + auto-fit (the real mushaf opening): each `.spread-row` is one
+   viewport-sized leaf. The fitter measures `.page-section` and targets the
+   row, so both pages are fully visible with no inner scrolling. */
+@media (min-width: 768px) {
+  body.spread-mode.dynamic-page-mode .spread-row {
+    height: 98vh; /* fallback for browsers without dvh */
+    height: calc(98dvh - var(--fit-top, 140px) - var(--fit-bottom, 0px));
+    overflow: hidden;
+    align-items: stretch;
+    margin-bottom: 4dvh;
+    scroll-margin-top: var(--fit-top, 140px);
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+  body.spread-mode.dynamic-page-mode .spread-row > .page-section {
+    height: 100%;
+    min-width: 0;
+    overflow: hidden;
+    scroll-snap-align: none;
+    scroll-margin-top: 0;
+  }
+  /* Measuring pass: the row must release its fixed height / clipping,
+     otherwise the grid stretches each page to the row box and scrollHeight
+     reports the clamped height instead of true content — which made the
+     fitter think short pages overflow (spread always fell back). */
+  html.dynamic-measuring .spread-row,
+  body.dynamic-dividers-min .spread-row {
+    height: auto !important;
+    overflow: visible;
+  }
+  html.dynamic-measuring .spread-row > .page-section,
+  body.dynamic-dividers-min .spread-row > .page-section {
+    height: auto !important;
+  }
+}
+/* Loading / failed placeholder for cross-surah pages */
+.spread-placeholder {
+  min-height: 200px;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 24px;
+  text-align: center;
+}
+.spread-placeholder.failed {
+  border-style: solid;
+}
+.spread-placeholder button {
+  background: var(--accent-light);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+/* Inline heading + bismillah on a shared page where a surah begins mid-page
+   (as in the printed mushaf). Kept compact to cost almost no vertical space. */
+.mushaf-surah-title {
+  text-align: center;
+  font-family: var(--font-arabic-text);
+  font-size: 0.8em;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--accent);
+  margin: 0.15em 0 0.05em;
+}
+.mushaf-surah-title .mushaf-surah-ornament {
+  font-size: 1.05em;
+  margin: 0 0.5em;
+  opacity: 0.9;
+  vertical-align: middle;
+}
+.mushaf-bismillah {
+  text-align: center;
+  font-family: var(--font-arabic-text);
+  font-size: 0.75em;
+  line-height: 1.5;
+  color: var(--text-main);
+  opacity: 0.85;
+  margin: 0 0 0.1em;
+}
+/* Small screens: stack the two pages vertically, hide the fold */
+@media (max-width: 767px) {
+  .spread-row {
+    grid-template-columns: 1fr;
+    gap: 16px 0;
+  }
+  .spread-row::after {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   Immersive reading mode (two-page spread): the top chrome (header +
+   fixed nav) and bottom chrome (tajweed legend + audio player) slide away
+   as OVERLAYS so the mushaf opening fills the viewport. Revealed chrome
+   never changes layout — beware: these bars only hide VISUALLY, so the
+   reader and popups must treat them as absent while immersive
+   (see js/immersiveReader.js — the single owner of these classes).
+   ========================================================================== */
+
+/* --- Chrome transitions (immersive only, so other views stay untouched) --- */
+body.immersive-read .app-header,
+body.immersive-read .fixed-nav,
+body.immersive-read .tajweed-legend,
+body.immersive-read .audio-player {
+  transition: transform var(--transition-normal),
+    visibility var(--transition-normal),
+    opacity var(--transition-normal),
+    background-color var(--transition-normal);
+}
+
+/* --- Hidden state: out of hit-testing and the a11y tree (visibility) --- */
+body.immersive-read:not(.immersive-top-open) .app-header {
+  transform: translateY(-100%);
+  visibility: hidden;
+  pointer-events: none;
+}
+/* .visible keeps iOS fixes / JS state intact — only the geometry changes */
+body.immersive-read:not(.immersive-top-open) #fixed-nav.visible {
+  transform: translateY(-100%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+/* body.audio-active offsets the legend above the player (bottom:116px),
+   which would leave it on screen after a full-height translate — pin it
+   to the edge while hidden so translateY(100%) removes it completely. */
+body.immersive-read:not(.immersive-bottom-open) #tajweed-legend.visible {
+  transform: translateY(100%);
+  bottom: 0;
+  pointer-events: none;
+}
+body.immersive-read:not(.immersive-bottom-open) .audio-player.visible {
+  transform: translateY(100%);
+  pointer-events: none;
+}
+
+/* --- Reclaim the chrome space: the spread fills the viewport.
+     margin-top must beat toggleFixedNav's inline margin; card
+     padding-bottom must beat loadSurah's inline padding --- */
+body.immersive-read .app-main {
+  margin-top: 0 !important;
+}
+body.immersive-read .app-main.audio-active {
+  padding-bottom: var(--app-pad, 24px);
+}
+body.immersive-read .surah-viewer-card {
+  padding-bottom: var(--sv-card-pad, 40px) !important;
+}
+
+/* Snapped-row geometry: scroll-margin-top (--fit-top) used to EXCEED the
+   inter-opening gap (4dvh), planting the previous opening's tail inside
+   the viewport — harmless before because the opaque header/nav covered
+   it, exposed now that chrome hides. The gap grows by --immersive-guard
+   (a dynamic breathing term that scales with the viewport), so the tail
+   always lands above the top edge even with a stale --fit-top during
+   re-snap transitions. */
+@media (min-width: 768px) {
+  body.immersive-read.spread-mode.dynamic-page-mode .spread-row {
+    margin-bottom: calc(var(--fit-top, 140px) + var(--immersive-guard, 0.5dvh));
+  }
+}
+
+/* --- Edge handles: small grabbers that summon the hidden chrome --- */
+.immersive-handle {
+  --handle-w: 38px;
+  --handle-h: 18px;
+  --handle-radius: 10px;
+  --handle-font: 10px;
+  display: none;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 145; /* above bars (140/135), below drawer overlay (150) */
+  width: var(--handle-w);
+  height: var(--handle-h);
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: var(--handle-font);
+  color: var(--text-muted);
+  background: var(--bg-header);
+  border: 1px solid var(--border-color);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+.immersive-handle:hover,
+.immersive-handle:focus-visible {
+  opacity: 1;
+  color: var(--accent);
+}
+.immersive-handle-top {
+  top: 0;
+  border-top: none;
+  border-radius: 0 0 var(--handle-radius) var(--handle-radius);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.immersive-handle-bottom {
+  bottom: 0;
+  border-bottom: none;
+  border-radius: var(--handle-radius) var(--handle-radius) 0 0;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.12);
+}
+body.immersive-read .immersive-handle { display: flex; }
+/* While the target chrome is open the matching handle steps aside */
+body.immersive-read.immersive-top-open .immersive-handle-top { display: none; }
+body.immersive-read.immersive-bottom-open .immersive-handle-bottom { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .immersive-handle,
+  body.immersive-read .app-header,
+  body.immersive-read .fixed-nav,
+  body.immersive-read .tajweed-legend,
+  body.immersive-read .audio-player {
+    transition: none;
+  }
 }
 
 .setting-note {

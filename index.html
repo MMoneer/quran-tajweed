@@ -356,6 +356,18 @@
             </div>
 
             <div class="help-card">
+              <h4>عرض صفحتين متقابلتين</h4>
+              <p>يعرض صفحتين جنباً إلى جنب كالمصحف الورقي على الكمبيوتر والتابلت: اليمنى فردية واليسرى زوجية منذ البداية ([1-2] [3-4] …).</p>
+              <ul>
+                <li>يعمل مع عرض الصفحة الديناميكي ليضبط الخط تلقائياً فتظهر كل فتحة كاملة في الشاشة بلا تمرير داخلي، وأزرار الصفحة تقلب ورقة كاملة (العدّاد يعرض المدى، مثال 3 - 4).</li>
+                <li>يتطلب تفعيل عرض الصفحة الديناميكي (يُفعَّل تلقائياً معه)، أما الديناميكي فيعمل منفرداً لعرض صفحة واحدة.</li>
+                <li>عند وقوع الانتشار على سورتيـن تُحمَّل الصفحة المجاورة تلقائياً، والنقر على آيتها ينقلك لسورة مالكها.</li>
+                <li>إذا لم تتسع الشاشة لصفحتين بخط مقروء، يتحول العرض كاملاً إلى صفحة واحدة مع ملاحظة في الإعدادات.</li>
+                <li>على الهواتف يكون العرض صفحة واحدة تلقائياً.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
               <h4>ألوان التجويد</h4>
               <ul>
                 <li><strong>تفعيل/تعطيل:</strong> استخدم المفتاح التبديل لتشغيل أو إيقاف ألوان التجويد. عند الإيقاف تصبح مفاتيح المجموعات والأحكام باهتة لكن حالتها محفوظة.</li>
@@ -672,6 +684,14 @@
             </div>
           </div>
           <div class="setting-item flex-between">
+            <label for="toggle-spread-view" title="يعرض صفحتين متقابلتين كالمصحف على الشاشات الكبيرة">عرض صفحتين متقابلتين</label>
+            <label class="switch">
+              <input type="checkbox" id="toggle-spread-view">
+              <span class="slider round"></span>
+            </label>
+          </div>
+          <p class="setting-note" id="spread-note" style="display: none;">الشاشة الحالية لا تتسع لصفحتين بخط مقروء — يُعرض وضع الصفحة الواحدة.</p>
+          <div class="setting-item flex-between">
             <label for="toggle-dynamic-page">عرض الصفحة الديناميكي</label>
             <label class="switch">
               <input type="checkbox" id="toggle-dynamic-page">
@@ -936,11 +956,21 @@
       </div>
     </footer>
 
+    <!-- Immersive reading handles (two-page spread mode only): small
+         edge grabbers that reveal the hidden top / bottom chrome. -->
+    <button id="immersive-handle-top" class="immersive-handle immersive-handle-top" aria-label="إظهار الهيدر وشريط التنقل" aria-expanded="false" title="إظهار الهيدر وشريط التنقل">
+      <i class="fa-solid fa-chevron-down"></i>
+    </button>
+    <button id="immersive-handle-bottom" class="immersive-handle immersive-handle-bottom" aria-label="إظهار دليل الألوان ومشغل الصوت" aria-expanded="false" title="إظهار دليل الألوان ومشغل الصوت">
+      <i class="fa-solid fa-chevron-up"></i>
+    </button>
+
   </div>
 
   <!-- App scripts -->
   <script src="js/version.js"></script>
   <script src="data/juz-data.js"></script>
+  <script src="js/pageMap.js"></script>
   <script src="js/hizbQuarterData.js"></script>
   <script src="js/versePreview.js"></script>
   <script src="js/dataStore.js"></script>
@@ -948,6 +978,7 @@
   <script src="js/api.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/dynamicPage.js"></script>
+  <script src="js/immersiveReader.js"></script>
   <script src="js/search.js"></script>
   <script src="js/surahIndex.js"></script>
   <script src="js/pageRenderer.js"></script>

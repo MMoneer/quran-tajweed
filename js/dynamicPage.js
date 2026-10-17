@@ -26,6 +26,12 @@ const DynamicPage = (() => {
   // the boundary doesn't flicker.
   const MIN_FONT = 18;
   const ACTIVATE_MIN = 18;
+  // Readable floor for the TWO-COLUMN spread. Lower than MIN_FONT because
+  // two columns halve the line width (≈ double the lines ≈ ~1.4× the needed
+  // font), so an 18px floor would confine the spread to very wide screens.
+  // 16px keeps dense Arabic legible on desktop/tablet and lets the spread
+  // engage roughly 150–200px earlier.
+  const SPREAD_MIN_FONT = 16;
   // Probe measuring font: FIXED so every refit starts from the same
   // point and converges to the same result. (Previously the probe
   // started from lastFont, i.e. the previous fit — since real content
@@ -76,12 +82,96 @@ const DynamicPage = (() => {
   }
 
   /**
+   * Immersive reading mode (two-page spread): the header, fixed nav,
+   * legend and audio player are OVERLAYS owned by ImmersiveReader —
+   * none of them reserves layout space, and their show/hide must not
+   * re-fit the font.
+   */
+  function isImmersive() {
+    return document.body.classList.contains('immersive-read');
+  }
+
+  /**
    * Effective state: the dynamic layout is actually applied right now
    * (setting on AND classes present). The setting alone is not enough —
    * an infeasible viewport keeps classes off (graceful fallback).
    */
   function isActive() {
     return document.body.classList.contains('dynamic-page-mode');
+  }
+
+  // ---- Two-page spread integration -------------------------------------
+  // The spread is only usable when each opening fits the viewport, so it
+  // always runs WITH this fitter. If two columns can't reach the readable
+  // floor (MIN_FONT) on the current viewport, the WHOLE reading falls back
+  // to a single page (never a half-broken in-page scroll).
+  let spreadFailSig = null; // 'WxH' at the viewport where spread proved infeasible
+  let spreadFailInfo = null; // diagnostics for the last spread fallback
+
+  function isSpreadOn() {
+    if (window.innerWidth < 768) return false;
+    try {
+      if (typeof SettingsManager !== 'undefined' && SettingsManager.state) {
+        return !!SettingsManager.state.settings.spreadView;
+      }
+    } catch (e) { /* fall through */ }
+    return document.body.classList.contains('spread-mode');
+  }
+
+  function spreadRowsPresent() {
+    const c = document.getElementById('surah-content-container');
+    return !!(c && c.querySelector('.spread-row'));
+  }
+
+  function viewportSig() {
+    return window.innerWidth + 'x' + window.innerHeight;
+  }
+
+  // Retry two columns only after the viewport changes (resize/rotate) —
+  // this is what prevents a rebuild↔fallback loop at a fixed size.
+  function shouldAttemptSpread() {
+    if (!isSpreadOn()) return false;
+    return spreadFailSig === null || viewportSig() !== spreadFailSig;
+  }
+
+  // Build or flatten the spread DOM (and rewire the page observer).
+  function applySpreadDom(wantRows) {
+    if (typeof SurahViewer === 'undefined') return;
+    const hasRows = spreadRowsPresent();
+    if (wantRows && !hasRows) {
+      if (typeof SurahViewer.buildSpreadLayout === 'function') SurahViewer.buildSpreadLayout();
+      if (typeof SurahViewer.setupPageNavigation === 'function') SurahViewer.setupPageNavigation();
+    } else if (!wantRows && hasRows) {
+      if (typeof SurahViewer.flattenSpreadLayout === 'function') SurahViewer.flattenSpreadLayout();
+      if (typeof SurahViewer.setupPageNavigation === 'function') SurahViewer.setupPageNavigation();
+    }
+  }
+
+  function useSpreadLayout() {
+    if (!isSpreadOn()) {
+      spreadFailSig = null; // fresh retry next time spread is enabled
+      document.body.classList.remove('spread-overflow');
+      applySpreadDom(false);
+      return false;
+    }
+    if (shouldAttemptSpread()) {
+      document.body.classList.remove('spread-overflow');
+      applySpreadDom(true);
+      return spreadRowsPresent();
+    }
+    // Known-infeasible at this viewport → single page for the whole reading.
+    // Set the flag BEFORE (re)wiring so surahView behaves as single.
+    document.body.classList.add('spread-overflow');
+    applySpreadDom(false);
+    return false;
+  }
+
+  function fallbackFromSpread(info) {
+    spreadFailSig = viewportSig();
+    spreadFailInfo = info || { reason: 'unknown', last: lastDecision.state };
+    document.body.classList.add('spread-overflow');
+    applySpreadDom(false);
+    scheduleRefit();
   }
 
   function clamp(v, lo, hi) {
@@ -93,8 +183,26 @@ const DynamicPage = (() => {
    * --fit-top (header + visible fixed nav + gap),
    * --fit-bottom (visible audio player + visible legend).
    * Returns the rounded pixel values for height math.
+   * While immersive the chrome is an overlay: only the compact
+   * app-main/card insets occupy real space, and the bottom is 0.
    */
   function computeOffsets() {
+    const root = document.documentElement;
+
+    if (isImmersive()) {
+      let top = 0;
+      const main = document.querySelector('.app-main');
+      if (main) top += parseFloat(getComputedStyle(main).paddingTop) || 0;
+      const card = document.querySelector(
+        '#surah-reader-section.active .surah-viewer-card'
+      );
+      if (card) top += parseFloat(getComputedStyle(card).paddingTop) || 0;
+      const topPx = Math.round(top);
+      root.style.setProperty('--fit-top', `${topPx}px`);
+      root.style.setProperty('--fit-bottom', '0px');
+      return { top: topPx, bottom: 0 };
+    }
+
     const header = document.querySelector('.app-header');
     const nav = document.querySelector('#fixed-nav.visible');
     const top = (header ? header.offsetHeight : 72)
@@ -106,7 +214,6 @@ const DynamicPage = (() => {
     const legend = document.querySelector('#tajweed-legend.visible');
     if (legend) bottom += legend.offsetHeight;
 
-    const root = document.documentElement;
     const topPx = Math.round(top);
     const bottomPx = Math.round(bottom);
     root.style.setProperty('--fit-top', `${topPx}px`);
@@ -121,13 +228,17 @@ const DynamicPage = (() => {
    * this avoids flashing the fixed layout on viewports where the
    * feasibility probe is about to fail (e.g. phones).
    */
+  let lastBoxInfo = {};
   function boxTarget(sections, top, bottom) {
     if (isActive()) {
       const h = sections[0].getBoundingClientRect().height;
+      lastBoxInfo = { branch: 'active-measure', h: Math.round(h) };
       if (h && h >= 100) return h;
     }
     const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-    return vh * 0.98 - top - bottom;
+    const val = vh * 0.98 - top - bottom;
+    lastBoxInfo = { branch: 'derived', vh, top, bottom, val: Math.round(val) };
+    return val;
   }
 
   function currentManualFont() {
@@ -237,6 +348,8 @@ const DynamicPage = (() => {
       setting: isEnabled(),
       active: isActive(),
       font: lastFont,
+      box: lastBoxInfo,
+      spreadFail: spreadFailInfo,
       trace: lastTrace
     };
   }
@@ -262,7 +375,14 @@ const DynamicPage = (() => {
       pendingRefit = true;
       return;
     }
-    if (!isEnabled()) { decide({ state: 'setting-off' }); setEffective(false); return; }
+    if (!isEnabled()) {
+      decide({ state: 'setting-off' });
+      setEffective(false);
+      // Fit off: drop any spread fallback marker and leave the DOM as-is
+      // (spread setting is also off whenever the fit is off — see settings).
+      document.body.classList.remove('spread-overflow');
+      return;
+    }
     if (!readerActive()) { decide({ state: 'no-reader' }); setEffective(false); return; }
     fitting = true;
     try {
@@ -273,6 +393,11 @@ const DynamicPage = (() => {
         document.querySelectorAll('#surah-reader-section.active .page-section')
       );
       if (!sections.length) { decide({ state: 'no-sections' }); setEffective(false); return; }
+
+      // Spread is a whole-reading decision: show two columns only when the
+      // viewport can fit them (best-effort here; the gate below is the
+      // authoritative check that triggers the full fallback).
+      const usingSpread = useSpreadLayout();
 
       // ---- Phase 1: feasibility probe WITHOUT touching layout ----
       // (no flash on phones): derived box + dividers minimized for real
@@ -312,10 +437,11 @@ const DynamicPage = (() => {
         root.classList.remove('dynamic-measuring');
         document.body.classList.remove('dynamic-dividers-min');
       }
-      // Same gate for fresh activation and ongoing sessions
-      // (ACTIVATE_MIN === MIN_FONT); only deactivation sits slightly
-      // lower so resizing across the boundary doesn't flicker.
-      const gate = isActive() ? MIN_FONT - 1.5 : ACTIVATE_MIN;
+      // Same gate for fresh activation and ongoing sessions; only
+      // deactivation sits slightly lower so resizing across the boundary
+      // doesn't flicker. Two columns use their own (lower) readable floor.
+      const floorFont = usingSpread ? SPREAD_MIN_FONT : MIN_FONT;
+      const gate = isActive() ? floorFont - 1.5 : floorFont;
       const req100 = Math.round(required * 100) / 100;
       const common = {
         target: Math.round(target), textTarget: Math.round(textTarget),
@@ -324,6 +450,17 @@ const DynamicPage = (() => {
         vh: window.innerHeight, required: req100, gate
       };
       if (required < gate) {
+        // Two columns that can't reach the readable floor → drop the whole
+        // reading to a single page (the spread setting stays on; it just
+        // doesn't engage at this viewport).
+        if (usingSpread) {
+          fallbackFromSpread({
+            reason: 'gate', required, gate,
+            target: Math.round(target), textTarget: Math.round(textTarget),
+            maxNatural: Math.round(maxNatural)
+          });
+          return;
+        }
         // Viewport too small for a readable fit — stay in normal view
         // instead of shrinking into illegibility or internal scrolling.
         // Re-evaluated on every refit (rotation/resize/surah change).
@@ -349,14 +486,22 @@ const DynamicPage = (() => {
       document.body.classList.add('dynamic-page-mode');
       document.documentElement.classList.add('dynamic-page-mode');
       target = sections[0].getBoundingClientRect().height;
-      if (!target || target < 100) { decide({ state: 'no-target', target }); setEffective(false); return; }
+      if (!target || target < 100) {
+        if (usingSpread) { fallbackFromSpread({ reason: 'p2-no-target', target }); return; }
+        decide({ state: 'no-target', target }); setEffective(false); return;
+      }
       // Now minimized for real: reserve its measured height + 15px bottom
       // offset + 6px breathing gap (keep `bottom` in sync, styles.css).
       // EPS absorbs rounding drift so text never exceeds the real CSS box
       // by a hair (which would add a scrollbar).
       const reserve = (dividerEl ? dividerEl.offsetHeight : 40) + 21;
       textTarget = target - reserve - 4;
-      if (textTarget < 160) { decide({ state: 'tiny', target, textTarget }); setEffective(false); return; }
+      if (textTarget < 160) {
+        if (usingSpread) { fallbackFromSpread({ reason: 'p2-tiny', target: Math.round(target), textTarget: Math.round(textTarget) }); return; }
+        decide({ state: 'tiny', target: Math.round(target), textTarget: Math.round(textTarget) });
+        setEffective(false);
+        return;
+      }
 
       // ---- Phase 3: converge + verify at real sizes, then publish ----
       root.classList.add('dynamic-measuring');
@@ -366,7 +511,7 @@ const DynamicPage = (() => {
         // sparse-page tail ever reaches it.
         const cap = fitCap();
         lastTrace = [];
-        let font = clamp(required, MIN_FONT, cap);
+        let font = clamp(required, floorFont, cap);
         for (let i = 0; i < MAX_ITERATIONS; i++) {
           root.style.setProperty('--dynamic-font-size', `${font}px`);
           let max = 0;
@@ -378,7 +523,7 @@ const DynamicPage = (() => {
           if (max <= textTarget) {
             // Room to grow? (stay slightly under to absorb rounding)
             if (max < textTarget * 0.92 && font < cap) {
-              const grown = clamp(font * Math.sqrt(textTarget / Math.max(max, 1)), MIN_FONT, cap);
+              const grown = clamp(font * Math.sqrt(textTarget / Math.max(max, 1)), floorFont, cap);
               if (grown - font < CONVERGE_EPS) break;
               font = grown;
               continue;
@@ -387,17 +532,17 @@ const DynamicPage = (() => {
           }
           // Content height scales ~quadratically with font size
           // (line count x line height both grow with it).
-          const shrunk = clamp(font * Math.sqrt(textTarget / max), MIN_FONT, cap);
+          const shrunk = clamp(font * Math.sqrt(textTarget / max), floorFont, cap);
           if (font - shrunk < CONVERGE_EPS) { font = shrunk; break; }
           font = shrunk;
-          if (font <= MIN_FONT) break;
+          if (font <= floorFont) break;
         }
 
         font = Math.round(font * 10) / 10;
         // Snap DOWN to the 0.5px grid: near a rounding boundary the
         // unconverged remainder (24.9 vs 25.1) used to flip the displayed
         // integer between refits. Snapping down can only improve the fit.
-        font = Math.max(MIN_FONT, Math.floor(font * 2) / 2);
+        font = Math.max(floorFont, Math.floor(font * 2) / 2);
         root.style.setProperty('--dynamic-font-size', `${font}px`);
         // Final verification at the applied size: line-wrap granularity
         // can defeat the model — SHRINK AND RE-MEASURE instead of
@@ -414,7 +559,7 @@ const DynamicPage = (() => {
           return m;
         };
         let finalMax = measureMax();
-        for (let g = 0; g < 8 && finalMax > textTarget + 2 && font > MIN_FONT; g++) {
+        for (let g = 0; g < 8 && finalMax > textTarget + 2 && font > floorFont; g++) {
           // Sqrt shrink (same model as the converge loop): the old linear
           // shrink overshot on wrap-granularity overflow and ratcheted the
           // font down to the MIN floor (18.000 on 1024x768 for a true ~21
@@ -422,7 +567,7 @@ const DynamicPage = (() => {
           // converges instead of plunging.
           let shrunk = Math.floor((font * Math.sqrt(textTarget / Math.max(finalMax, 1))) * 10) / 10;
           if (shrunk >= font) shrunk = Math.floor((font - 0.1) * 10) / 10;
-          shrunk = Math.max(MIN_FONT, shrunk);
+          shrunk = Math.max(floorFont, shrunk);
           if (shrunk >= font) break;
           font = shrunk;
           root.style.setProperty('--dynamic-font-size', `${font}px`);
@@ -430,6 +575,10 @@ const DynamicPage = (() => {
           lastTrace.push({ phase: 'verify', font: +font.toFixed(2), max: Math.round(finalMax) });
         }
         if (finalMax > textTarget + 2) {
+          if (usingSpread) {
+            fallbackFromSpread({ reason: 'overflow', finalMax: Math.round(finalMax), textTarget: Math.round(textTarget), font });
+            return;
+          }
           decide({
             ...common, state: 'overflow', font,
             target: Math.round(target), textTarget: Math.round(textTarget),
@@ -439,6 +588,7 @@ const DynamicPage = (() => {
           return;
         }
         lastFont = font;
+        spreadFailSig = null; // a successful spread clears the failure memo
         decide({
           ...common, state: 'active', font,
           target: Math.round(target), textTarget: Math.round(textTarget)
@@ -496,6 +646,9 @@ const DynamicPage = (() => {
     // (audio player show/hide, legend show/hide/collapse, fixed nav).
     try {
       const observer = new MutationObserver(() => {
+        // Chrome is an overlay while immersive — show/hide must not
+        // re-fit (one refit already ran when the mode flipped).
+        if (isImmersive()) return;
         if (isEnabled()) scheduleRefit();
       });
       ['audio-player', 'tajweed-legend', 'fixed-nav'].forEach(id => {

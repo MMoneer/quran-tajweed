@@ -112,6 +112,9 @@ const App = (() => {
     // 1b. Initialize dynamic page view (resize/overlay observers; no-op unless enabled)
     if (typeof DynamicPage !== 'undefined') DynamicPage.init();
 
+    // 1c. Initialize immersive reading mode (two-page spread chrome auto-hide)
+    if (typeof ImmersiveReader !== 'undefined') ImmersiveReader.init();
+
     // 2. Initialize Audio Player
     AudioPlayer.init();
 

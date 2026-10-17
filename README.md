@@ -18,6 +18,12 @@ A modern, interactive Quran reader with **Tajweed color coding**, audio playback
 - **Juz Navigation** - Jump to any of the 30 Juz (parts)
 - **Surah Index** - Searchable grid with Arabic/English names and metadata
 
+### Mushaf View
+- **Two-page Spread** - On wide screens the reader shows a real mushaf opening (two facing pages)
+- **Shared Boundary Pages** - A page holding the end of one surah and the start of the next shows *both* surahs' verses; the surah that begins mid-page gets an inline heading + bismillah (۞ سُورَة …)
+- **Dynamic Page Auto-fit** - Text auto-scales so each page fills like the printed mushaf
+- **Immersive Reading** - Auto-hiding header, nav, tajweed legend and player with drag handles
+
 ### Tajweed Rules
 - **18 Tajweed Rules** with color indicators:
   - **Madd (Elongation)**: Normal, Permissible, Obligatory, Obligatory Separated (Monfasel), Necessary
@@ -97,11 +103,15 @@ quran.com/
 │   ├── dataStore.js        # IndexedDB storage layer
 │   ├── dataImporter.js     # Bulk data import from API to IndexedDB
 │   ├── dateUtils.js        # Local-calendar date helpers
+│   ├── dynamicPage.js      # Dynamic page auto-fit & two-page spread layout
 │   ├── firstRunWizard.js   # First-launch import wizard UI
+│   ├── hizbQuarterData.js  # Hizb / quarter (rub) boundary data
+│   ├── immersiveReader.js  # Immersive reading chrome (auto-hiding bars)
 │   ├── indexedDbAdapter.js # Memorization persistence adapter (quran_memorization_db)
 │   ├── memorizationEngine.js  # Spaced-repetition engine (stateless, pure functions)
 │   ├── memorizationView.js    # Memorization dashboard UI
 │   ├── pageIndex.js        # Ayah ↔ page index built from imported verses
+│   ├── pageMap.js          # Mushaf page ↔ surah map (shared boundary pages)
 │   ├── pageRenderer.js     # Tajweed text processing & rendering
 │   ├── quranMetaService.js # Surah/ayah position math service
 │   ├── search.js           # Verse search
@@ -124,8 +134,8 @@ quran.com/
 
 Two separate counters — do not mix them:
 
-- **`APP_VERSION`** (`js/version.js`, shown in Settings) — user-facing release version (semantic). Bump **only on releases**: major = breaking change/data migration, minor = new feature, patch = fixes only. Current: `1.4.0`.
-- **GitHub Releases** — each release is published as a GitHub Release (e.g. `v1.4.0`) with notes; `APP_VERSION` must match the release tag (without the `v`).
+- **`APP_VERSION`** (`js/version.js`, shown in Settings) — user-facing release version (semantic). Bump **only on releases**: major = breaking change/data migration, minor = new feature, patch = fixes only. Current: `1.5.0`.
+- **GitHub Releases** — each release is published as a GitHub Release (e.g. `v1.5.0`) with notes; `APP_VERSION` must match the release tag (without the `v`).
 - **`CACHE_VERSION`** (`sw.js`, e.g. `quran-pwa-v19`) — internal offline-cache counter. Bump on **every** static-asset change (even one-line CSS) and list any new asset in `PRECACHE`, or offline/PWA clients will keep serving stale files. Never shown to users.
 
 ## Architecture
@@ -144,6 +154,9 @@ Each component is implemented as a **Revealing Module Pattern** (IIFE) exposing 
 | `SurahIndex` | Chapter list grid, search/filter functionality |
 | `SurahViewer` | Surah reader view, navigation controls |
 | `PageRenderer` | Tajweed text processing, Uthmanic script rendering, page division |
+| `PageMap` | Mushaf page ↔ surah map; which surahs share a boundary page |
+| `DynamicPage` | Dynamic page auto-fit and two-page spread layout |
+| `ImmersiveReader` | Immersive reading chrome (auto-hiding header/nav/legend/player) |
 | `AudioPlayer` | Audio playback (EveryAyah.com, multiple reciters), play modes, progress tracking |
 | `VerseClipboard` | Verse copying utilities (Arabic digits, clipboard fallback, toast notifications) |
 | `TajweedRules` | Rules reference page rendering |

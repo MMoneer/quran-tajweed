@@ -29,6 +29,7 @@ const SettingsManager = (() => {
     tajweedActive: true,
     reciter: 'Minshawy_Murattal_128kbps',
     dynamicPage: false, // dynamic mushaf page view: each page ~98dvh with auto-fit font
+    spreadView: false, // two-page spread (mushaf opening) on wide screens; exclusive with dynamicPage
     fontSize: 30, // px (default for desktop/tablet)
     // Font sizes per media type
     fontSizes: {
@@ -237,6 +238,13 @@ const SettingsManager = (() => {
     setupEventListeners();
     setupMediaListeners();
     generateLegend();
+
+    // DynamicPage toggles `spread-overflow` on <body> when the whole reading
+    // falls back to a single page; mirror it in the settings note.
+    try {
+      new MutationObserver(updateSpreadNote)
+        .observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    } catch (e) { /* MutationObserver unavailable — note updates on toggle */ }
   }
 
   /**
@@ -368,6 +376,9 @@ const SettingsManager = (() => {
     // Apply dynamic page view mode (mushaf page ~98dvh + auto-fit font)
     applyDynamicPageMode();
 
+    // Apply two-page spread mode (exclusive with dynamic page view)
+    applySpreadMode();
+
     // Apply per-rule / per-group enable states (reader text only)
     applyRuleVisibilityToDOM();
   }
@@ -445,6 +456,33 @@ const SettingsManager = (() => {
     state.disabledRules = {};
     saveDisabledRulesToLocalStorage();
     applyRuleVisibilityToDOM();
+  }
+
+  /**
+   * Apply two-page spread mode: body class drives the grid layout in
+   * surahView (grouping happens there). Requires the dynamic fitter —
+   * enabling one turns the other on (handled in the toggle listeners).
+   */
+  function applySpreadMode() {
+    const on = !!state.settings.spreadView;
+    const toggle = document.getElementById('toggle-spread-view');
+    if (toggle) toggle.checked = on;
+    document.body.classList.toggle('spread-mode', on);
+    if (!on) document.body.classList.remove('spread-overflow');
+    if (typeof SurahViewer !== 'undefined' && typeof SurahViewer.refreshSpreadLayout === 'function') {
+      SurahViewer.refreshSpreadLayout();
+    }
+    updateSpreadNote();
+  }
+
+  /**
+   * Reflect DynamicPage's whole-reading fallback (two columns don't fit at
+   * this viewport) in the settings — without silently flipping the switch.
+   */
+  function updateSpreadNote() {
+    const note = document.getElementById('spread-note');
+    if (!note) return;
+    note.style.display = document.body.classList.contains('spread-overflow') ? '' : 'none';
   }
 
   /**
@@ -576,12 +614,32 @@ const SettingsManager = (() => {
       applyRuleVisibilityToDOM();
     });
 
-    // Dynamic page view toggle (mushaf page ~98dvh + auto-fit font)
+    // Dynamic page view toggle (mushaf page ~98dvh + auto-fit font).
+    // Works alone; it is the prerequisite for the two-page spread.
     const toggleDynamic = document.getElementById('toggle-dynamic-page');
     toggleDynamic?.addEventListener('change', (e) => {
       state.settings.dynamicPage = e.target.checked;
+      if (!state.settings.dynamicPage && state.settings.spreadView) {
+        // Spread cannot run without the fitter → drop it too.
+        state.settings.spreadView = false;
+        applySpreadMode();
+      }
       applyDynamicPageMode();
       saveSettingsToLocalStorage();
+      if (typeof DynamicPage !== 'undefined') DynamicPage.refit();
+    });
+
+    // Two-page spread toggle (mushaf opening on wide screens).
+    // Requires the fitter, so enabling it also enables dynamic page view.
+    const toggleSpread = document.getElementById('toggle-spread-view');
+    toggleSpread?.addEventListener('change', (e) => {
+      state.settings.spreadView = e.target.checked;
+      if (state.settings.spreadView && !state.settings.dynamicPage) {
+        state.settings.dynamicPage = true;
+        applyDynamicPageMode();
+      }
+      saveSettingsToLocalStorage();
+      applySpreadMode();
       if (typeof DynamicPage !== 'undefined') DynamicPage.refit();
     });
 
@@ -775,7 +833,14 @@ const SettingsManager = (() => {
   function updateReaderPadding() {
     const readerCard = document.querySelector('.surah-viewer-card');
     if (!readerCard) return;
-    
+
+    // Immersive reading: CSS pins the card padding (bottom chrome is an
+    // overlay) — clear any inline padding a previous state left behind.
+    if (document.body.classList.contains('immersive-read')) {
+      readerCard.style.paddingBottom = '';
+      return;
+    }
+
     if (readerCard.style.paddingBottom) {
       const legend = document.getElementById('tajweed-legend');
       if (legend && legend.classList.contains('visible')) {
