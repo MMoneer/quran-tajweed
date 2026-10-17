@@ -270,36 +270,10 @@ const PageRenderer = (() => {
 
     // 2. Render verses with page divisions
     for (let pageIdx = 0; pageIdx < page_breaks.length; pageIdx++) {
-      const pageStart = page_breaks[pageIdx] - 1;
-      const pageEnd = pageIdx + 1 < page_breaks.length
-        ? page_breaks[pageIdx + 1] - 1
-        : verses.length;
-
-      const firstVerseOfPage = verses[page_breaks[pageIdx] - 1];
-      const firstWordOfPage = firstVerseOfPage?.words?.find(w => w.char_type_name === 'word');
-      const currentPageNumber = firstWordOfPage?.page_number || pageIdx + 1;
+      const { pageStart, pageEnd, currentPageNumber } = pageBounds(surahData, pageIdx);
 
       html += `<div class="page-section" data-page-number="${currentPageNumber}">`;
-
-      const pageVerses = verses.slice(pageStart, pageEnd);
-      for (let i = 0; i < pageVerses.length; i++) {
-        const verse = pageVerses[i];
-        const localAyahNum = pageStart + i + 1;
-
-        // Insert juz divider if needed
-        if (localAyahNum !== 1) {
-          const juzHere = juzStartsInSurah.find(j => j.ayah === localAyahNum);
-          if (juzHere) {
-            html += createJuzDividerHTML(juzHere.juz);
-          }
-        }
-
-        const verseHtml = wrapNormalMadd(buildVerseHTML(verse));
-        html += `<span class="verse" data-ayah="${verse.id}">${verseHtml}</span>`;
-        if (i < pageVerses.length - 1) {
-          html += ' ';
-        }
-      }
+      html += buildVerseSpans(verses, pageStart, pageEnd, juzStartsInSurah, true);
 
       // Divider is the LAST CHILD of its own page section (not a sibling):
       // in dynamic mode it is absolutely positioned at the page-box
@@ -312,6 +286,112 @@ const PageRenderer = (() => {
 
     // Insert all HTML in one DOM operation
     container.innerHTML = html;
+  }
+
+  /**
+   * Page geometry for one page index: slice bounds and the mushaf page
+   * number taken from the first word. Shared by every page builder
+   * (renderSurahWithPages, pageVerseSlice, buildMushafPage) so they
+   * cannot diverge.
+   */
+  function pageBounds(surahData, pageIdx) {
+    const { verses, page_breaks } = surahData;
+    const pageStart = page_breaks[pageIdx] - 1;
+    const pageEnd = pageIdx + 1 < page_breaks.length
+      ? page_breaks[pageIdx + 1] - 1
+      : verses.length;
+    const firstVerseOfPage = verses[page_breaks[pageIdx] - 1];
+    const firstWordOfPage = firstVerseOfPage?.words?.find(w => w.char_type_name === 'word');
+    const currentPageNumber = firstWordOfPage?.page_number || pageIdx + 1;
+    return { pageStart, pageEnd, currentPageNumber };
+  }
+
+  /**
+   * Verse spans (and any in-page juz dividers) for one page slice.
+   * skipAyah1Juz drops the ayah-1 divider: the full-surah renderer emits
+   * it outside the page box before the first section, so re-emitting it
+   * here would duplicate it.
+   */
+  function buildVerseSpans(verses, pageStart, pageEnd, juzStartsInSurah, skipAyah1Juz) {
+    let html = '';
+    const pageVerses = verses.slice(pageStart, pageEnd);
+    for (let i = 0; i < pageVerses.length; i++) {
+      const verse = pageVerses[i];
+      const localAyahNum = pageStart + i + 1;
+
+      if (!(skipAyah1Juz && localAyahNum === 1)) {
+        const juzHere = juzStartsInSurah.find(j => j.ayah === localAyahNum);
+        if (juzHere) {
+          html += createJuzDividerHTML(juzHere.juz);
+        }
+      }
+
+      const verseHtml = wrapNormalMadd(buildVerseHTML(verse));
+      html += `<span class="verse" data-ayah="${verse.id}">${verseHtml}</span>`;
+      if (i < pageVerses.length - 1) {
+        html += ' ';
+      }
+    }
+    return html;
+  }
+
+  /**
+   * Verse slice of a surah that falls on `page`, or null when the surah
+   * has no verse on it. pageStart/pageEnd are indices into `verses`.
+   */
+  function pageVerseSlice(surahData, page) {
+    const { verses, page_breaks } = surahData;
+    if (!verses || !page_breaks) return null;
+    for (let pageIdx = 0; pageIdx < page_breaks.length; pageIdx++) {
+      const b = pageBounds(surahData, pageIdx);
+      if (b.currentPageNumber !== page) continue;
+      return { verses, pageStart: b.pageStart, pageEnd: b.pageEnd };
+    }
+    return null;
+  }
+
+  /**
+   * Compact inline surah heading shown mid-page when a surah begins on a
+   * shared mushaf page (the printed mushaf prints the title there too).
+   */
+  function mushafSurahTitleHTML(surahData) {
+    const ornament = '<span class="mushaf-surah-ornament" aria-hidden="true">۞</span>';
+    let html = `<div class="mushaf-surah-title">${ornament}<span>سُورَةُ ${surahData.name_arabic}</span>${ornament}</div>`;
+    if (surahData.bismillah_pre) {
+      html += `<div class="mushaf-bismillah">بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ</div>`;
+    }
+    return html;
+  }
+
+  /**
+   * Build ONE complete mushaf page from every surah that shares it.
+   * `surahList` is an ascending array (or map) of already-loaded surah
+   * data; each surah's verses that sit on `page` are concatenated in
+   * order, with an inline title for any surah that starts on the page.
+   * Returns '' when no surah contributes to the page.
+   */
+  function buildMushafPage(page, surahList) {
+    const list = Array.isArray(surahList) ? surahList : Object.values(surahList || {});
+    let body = '';
+    for (const surahData of list) {
+      if (!surahData) continue;
+      const slice = pageVerseSlice(surahData, page);
+      if (!slice) continue;
+      const startsHere = (typeof PageMap !== 'undefined')
+        ? PageMap.surahStartsOnPage(surahData.surah_id, page)
+        : (slice.pageStart === 0);
+      if (startsHere) body += mushafSurahTitleHTML(surahData);
+      const juzStartsInSurah = (typeof JUZ_DATA !== 'undefined')
+        ? JUZ_DATA.filter(j => j.surah === surahData.surah_id)
+        : [];
+      body += buildVerseSpans(slice.verses, slice.pageStart, slice.pageEnd, juzStartsInSurah, false);
+    }
+    if (!body) return '';
+    let html = `<div class="page-section" data-page-number="${page}">`;
+    html += body;
+    html += createPageDividerHTML(page);
+    html += `</div>`;
+    return html;
   }
   
   /**
@@ -358,6 +438,8 @@ const PageRenderer = (() => {
   
   return {
     renderSurahWithPages,
+    buildMushafPage,
+    mushafSurahTitleHTML,
     buildWordHTML,
     wrapNormalMadd,
     normalizeWawMonfasel

@@ -15,6 +15,16 @@ const SurahViewer = (() => {
   // Last actually-seen mushaf page (tracked silently; only persisted
   // when the user LEAVES the reader — see flushReadingPosition).
   let lastSeenPage = null;
+  // Two-page spread: borrowed adjacent-surah data cache (surahId -> surahData)
+  // for cross-surah openings. Reset on every loadSurah.
+  let spreadBorrowed = {};
+
+  // Opt-in perf timing. Enable with `localStorage.setItem('quran-perf','1')`.
+  function logPerf(msg) {
+    try {
+      if (localStorage.getItem('quran-perf') === '1') console.log(msg);
+    } catch (e) { /* storage unavailable */ }
+  }
 
   let swipeStartX = 0;
   let swipeStartY = 0;
@@ -32,6 +42,7 @@ const SurahViewer = (() => {
     // Switching surahs is NOT leaving the reader — keep tracking
     // silently, just reset for the new surah.
     lastSeenPage = null;
+    spreadBorrowed = {};
     currentSurahId = parseInt(surahId);
     const generation = ++loadGeneration;
     
@@ -47,9 +58,12 @@ const SurahViewer = (() => {
     // Show legend footer collapsed by default (click to expand)
     const legend = document.getElementById('tajweed-legend');
     legend.classList.add('visible', 'collapsed');
-    // Add padding for collapsed legend header
+    // Add padding for collapsed legend header — not in immersive reading
+    // (CSS pins the card padding there; inline padding would fight it).
     const readerCard = document.querySelector('.surah-viewer-card');
-    if (readerCard) readerCard.style.paddingBottom = '50px';
+    if (readerCard && !document.body.classList.contains('immersive-read')) {
+      readerCard.style.paddingBottom = '50px';
+    }
 
     try {
       // Performance monitoring
@@ -60,7 +74,7 @@ const SurahViewer = (() => {
       if (generation !== loadGeneration) return;
 
       const fetchTime = performance.now() - perfStart;
-      console.log(`[Perf] Data fetch: ${fetchTime.toFixed(1)}ms for surah ${currentSurahId}`);
+      logPerf(`[Perf] Data fetch: ${fetchTime.toFixed(1)}ms for surah ${currentSurahId}`);
 
       currentSurahVerses = surahData.verses || [];
       currentSurahData = surahData;
@@ -78,7 +92,11 @@ const SurahViewer = (() => {
       const renderStart = performance.now();
       PageRenderer.renderSurahWithPages(surahData);
       const renderTime = performance.now() - renderStart;
-      console.log(`[Perf] Render: ${renderTime.toFixed(1)}ms (${surahData.verses.length} verses)`);
+      logPerf(`[Perf] Render: ${renderTime.toFixed(1)}ms (${surahData.verses.length} verses)`);
+
+      // Two-page spread: group sections into mushaf openings (exclusive
+      // with dynamic page view — the settings toggle enforces this).
+      if (isSpreadMode()) buildSpreadLayout();
 
       // Dynamic page view: fit mushaf pages to ~98dvh when enabled
       if (typeof DynamicPage !== 'undefined') DynamicPage.onSurahRendered();
@@ -207,9 +225,266 @@ const SurahViewer = (() => {
   }
 
   /**
-    * Build page-to-surah mapping for current surah
-    */
+   * Two-page spread (mushaf opening) support.
+   *
+   * Pairing is global and fixed like the printed mushaf: [1,2] [3,4] …
+   * [603,604] — 302 openings. In RTL the first DOM child renders on the
+   * RIGHT, so the odd page (anchor) is always placed first.
+   */
+  function isSpreadMode() {
+    // Wide screens only: below 768px the two columns collapse anyway, so
+    // the reader stays single-page (and DynamicPage fits it as usual).
+    if (window.innerWidth < 768) return false;
+    // Whole-reading fallback: the fitter couldn't fit two columns at the
+    // readable floor, so the reader behaves as a single page for now.
+    if (document.body.classList.contains('spread-overflow')) return false;
+    try {
+      if (typeof SettingsManager !== 'undefined' && SettingsManager.state) {
+        return !!SettingsManager.state.settings.spreadView;
+      }
+    } catch (e) { /* fall through to class check */ }
+    return document.body.classList.contains('spread-mode');
+  }
+
+  /**
+   * Spread containing page n → [anchor(odd/right), second(even/left|null)].
+   */
+  function spreadForPage(n) {
+    n = Math.max(1, Math.min(604, parseInt(n) || 1));
+    const anchor = (n % 2 === 1) ? n : n - 1;
+    const second = anchor + 1 <= 604 ? anchor + 1 : null;
+    return [anchor, second];
+  }
+
+  /**
+   * True when the current surah is the ONLY surah on `page`: then its
+   * already-rendered `.page-section` is a complete mushaf page and can be
+   * reused as-is. Shared boundary pages (two surahs on one page, or pages
+   * owned by a neighbour) must be rebuilt whole from every surah on them.
+   */
+  function ownPageIsComplete(page) {
+    if (typeof PageMap === 'undefined') return true; // fall back to old behaviour
+    const owners = PageMap.surahsOnPage(page);
+    return owners.length === 1 && owners[0] === currentSurahId;
+  }
+
+  /**
+   * Loaded surah-data objects that a rebuilt mushaf section was assembled
+   * from (recorded in data-surahs by fillBorrowedPages).
+   */
+  function pageSurahsData(section) {
+    const ids = (section?.dataset.surahs || '').split(',').map(n => parseInt(n)).filter(n => n);
+    return ids.map(id => (id === currentSurahId ? currentSurahData : spreadBorrowed[id])).filter(Boolean);
+  }
+
+  /**
+   * Own pages are reused straight from renderSurahWithPages, whose surah
+   * heading/bismillah lived in the top banner (hidden in spread mode). Put
+   * the heading back inline when this page is the current surah's first page.
+   */
+  function injectOwnSurahHeading(section, page) {
+    if (typeof PageMap === 'undefined' || !currentSurahData) return;
+    if (!PageMap.surahStartsOnPage(currentSurahId, page)) return;
+    if (section.querySelector('.mushaf-surah-title')) return;
+    section.insertAdjacentHTML('afterbegin', PageRenderer.mushafSurahTitleHTML(currentSurahData));
+  }
+
+  /**
+   * Group the rendered `.page-section` nodes into `.spread-row` openings.
+   * Pages the current surah owns alone reuse their own section; every
+   * other page (foreign or shared between surahs) is rebuilt as a full
+   * mushaf page by fillBorrowedPages().
+   */
+  function buildSpreadLayout() {
+    const container = document.getElementById('surah-content-container');
+    if (!container || container.querySelector('.spread-row')) return;
+    const sections = [...container.querySelectorAll(':scope > .page-section')];
+    if (!sections.length) return;
+
+    // The mushaf opening has no scroll stop of its own, so the whole top
+    // banner (surah title, meta details, bismillah) is dropped in spread mode.
+    // A surah beginning mid-page is announced by the inline title instead.
+    const banner = container.querySelector(':scope > .surah-header-banner');
+    if (banner) banner.remove();
+
+    const pages = sections.map(s => parseInt(s.dataset.pageNumber)).filter(n => !isNaN(n));
+    if (!pages.length) return;
+    const minP = Math.min(...pages);
+    const maxP = Math.max(...pages);
+    const [firstAnchor] = spreadForPage(minP);
+    const [lastAnchor] = spreadForPage(maxP);
+
+    const gen = loadGeneration;
+    const frag = document.createDocumentFragment();
+    for (let anchor = firstAnchor; anchor <= lastAnchor; anchor += 2) {
+      const [, second] = spreadForPage(anchor);
+      const row = document.createElement('div');
+      row.className = 'spread-row';
+      row.dataset.anchor = String(anchor);
+      if (second) row.dataset.second = String(second);
+
+      [anchor, second].forEach(p => {
+        if (!p) return;
+        const existing = container.querySelector(`:scope > .page-section[data-page-number="${p}"]`);
+        if (existing && ownPageIsComplete(p)) {
+          injectOwnSurahHeading(existing, p);
+          row.appendChild(existing);
+          return;
+        }
+        // Foreign or shared page → rebuilt whole from its surahs.
+        if (existing) existing.remove();
+        const ph = document.createElement('div');
+        ph.className = 'spread-placeholder';
+        ph.dataset.page = String(p);
+        ph.dataset.owner = String(findSurahForPage(p));
+        ph.innerHTML = `<div class="spinner"></div><p>جارٍ تحميل الصفحة ${p}…</p>`;
+        row.appendChild(ph);
+      });
+      frag.appendChild(row);
+    }
+    container.appendChild(frag);
+    fillBorrowedPages(gen);
+  }
+
+  /**
+   * Replace spread placeholders with complete mushaf pages assembled from
+   * every surah that shares the page (cached). Failures become a goto card.
+   */
+  async function fillBorrowedPages(gen) {
+    const placeholders = [...document.querySelectorAll('.spread-placeholder[data-page]')];
+    let replaced = false;
+    for (const ph of placeholders) {
+      const page = parseInt(ph.dataset.page);
+      if (isNaN(page)) {
+        markSpreadFailed(ph);
+        continue;
+      }
+      try {
+        const owners = (typeof PageMap !== 'undefined')
+          ? PageMap.surahsOnPage(page)
+          : [findSurahForPage(page)];
+        const list = [];
+        let failed = false;
+        for (const owner of owners) {
+          let data = (owner === currentSurahId) ? currentSurahData : spreadBorrowed[owner];
+          if (!data) {
+            data = await QuranAPI.getSurahLocal(owner);
+            if (gen !== loadGeneration || !isSpreadMode()) return;
+            if (owner !== currentSurahId) spreadBorrowed[owner] = data;
+          }
+          if (!data) { failed = true; break; }
+          list.push(data);
+        }
+        const html = failed ? '' : PageRenderer.buildMushafPage(page, list);
+        if (gen !== loadGeneration || !isSpreadMode() || !ph.isConnected) return;
+        if (!html) {
+          markSpreadFailed(ph);
+          continue;
+        }
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const section = tmp.firstElementChild;
+        if (!section) {
+          markSpreadFailed(ph);
+          continue;
+        }
+        section.setAttribute('data-mushaf', '1');
+        section.setAttribute('data-surahs', owners.join(','));
+        ph.replaceWith(section);
+        replaced = true;
+      } catch (err) {
+        if (gen !== loadGeneration) return;
+        markSpreadFailed(ph);
+      }
+    }
+    // Rebuilt pages changed the row content → refit (their height counts).
+    if (replaced && typeof DynamicPage !== 'undefined' && DynamicPage.refit) {
+      DynamicPage.refit();
+    }
+  }
+
+  function markSpreadFailed(ph) {
+    if (!ph.isConnected) return;
+    const owner = ph.dataset.owner;
+    const page = ph.dataset.page;
+    ph.classList.add('failed');
+    ph.innerHTML = `<p>الصفحة ${page} في سورة أخرى</p>` +
+      `<button type="button" data-goto-surah="${owner}">انتقل للسورة</button>`;
+  }
+
+  /**
+   * Rebuild the flat single-page column for the current surah. Shared
+   * boundary pages are replaced by foreign mushaf pages while spread, so
+   * the flat view is regenerated from the surah data instead of unwrapped.
+   */
+  function flattenSpreadLayout() {
+    const container = document.getElementById('surah-content-container');
+    if (!container) return;
+    if (currentSurahData) {
+      PageRenderer.renderSurahWithPages(currentSurahData);
+      return;
+    }
+    // Fallback (no in-memory data): unwrap whatever own sections remain.
+    container.querySelectorAll('.page-section[data-mushaf], .spread-placeholder')
+      .forEach(el => el.remove());
+    const rows = [...container.querySelectorAll('.spread-row')];
+    if (!rows.length) return;
+    const sections = [];
+    rows.forEach(row => {
+      [...row.querySelectorAll(':scope > .page-section')].forEach(s => sections.push(s));
+    });
+    sections.sort((a, b) => parseInt(a.dataset.pageNumber) - parseInt(b.dataset.pageNumber));
+    const firstRow = rows[0];
+    sections.forEach(s => firstRow.parentNode.insertBefore(s, firstRow));
+    rows.forEach(r => r.remove());
+  }
+
+  /**
+   * Called by SettingsManager when the spread toggle changes (and on
+   * every settings apply — no-ops when nothing needs doing). Rebuilds the
+   * layout AND the page observer (which watches rows in spread mode,
+   * sections otherwise), preserving the current position.
+   */
+  function refreshSpreadLayout() {
+    const container = document.getElementById('surah-content-container');
+    if (!container) return;
+    const spreadOn = isSpreadMode();
+    const hasRows = !!container.querySelector('.spread-row');
+    if (spreadOn && hasRows) return;
+    if (!spreadOn && !hasRows) return;
+    // Nothing rendered yet (e.g. settings init) → loadSurah builds it.
+    if (!container.querySelector('.page-section')) return;
+
+    const keep = currentPageNumber;
+    if (spreadOn) buildSpreadLayout();
+    else flattenSpreadLayout();
+    setupPageNavigation();
+
+    // Restore position (setup above resets to the first page).
+    const prevBtn = document.getElementById('btn-prev-page');
+    const nextBtn = document.getElementById('btn-next-page');
+    const disp = document.getElementById('page-nav-current');
+    if (keep && prevBtn && nextBtn && disp) {
+      if (spreadOn) {
+        const [a, b] = spreadForPage(keep);
+        setSpreadIndicator(a, b, prevBtn, nextBtn, disp);
+      } else {
+        setSidePageIndicator(keep, prevBtn, nextBtn, disp);
+      }
+      scrollToPage(keep, 'auto');
+    }
+  }
+
   function scrollToPage(pageNumber, behavior = 'smooth') {
+    const n = parseInt(pageNumber);
+    if (isSpreadMode() && !isNaN(n)) {
+      const [anchor] = spreadForPage(n);
+      const row = document.querySelector(`.spread-row[data-anchor="${anchor}"]`);
+      if (row) {
+        row.scrollIntoView({ behavior, block: 'start' });
+        return true;
+      }
+    }
     const pageSection = document.querySelector(`.page-section[data-page-number="${pageNumber}"]`);
     if (pageSection) {
       pageSection.scrollIntoView({ behavior, block: 'start' });
@@ -676,10 +951,28 @@ const SurahViewer = (() => {
   }
 
   /**
+   * The audio player as it actually occupies the screen right now.
+   * While immersive the tray is an overlay hidden behind an
+   * ImmersiveReader class — treat it as absent unless the bottom
+   * chrome is open, so floating elements don't leave a gap above an
+   * invisible bar.
+   */
+  function screenAudioPlayer() {
+    const player = document.querySelector('.audio-player.visible');
+    if (!player) return null;
+    const body = document.body;
+    if (body.classList.contains('immersive-read') &&
+        !body.classList.contains('immersive-bottom-open')) {
+      return null;
+    }
+    return player;
+  }
+
+  /**
    * Position a floating element above the audio player when visible
    */
   function positionFloatingElement(el) {
-    const audioPlayer = document.querySelector('.audio-player.visible');
+    const audioPlayer = screenAudioPlayer();
     el.style.bottom = audioPlayer ? `${audioPlayer.offsetHeight + 16}px` : '24px';
   }
 
@@ -833,6 +1126,7 @@ const SurahViewer = (() => {
     });
 
     // Reposition selection bar when audio player visibility changes
+    // (also when ImmersiveReader opens/closes the overlay tray)
     const audioPlayerEl = document.querySelector('.audio-player');
     if (audioPlayerEl) {
       const observer = new MutationObserver(() => {
@@ -840,6 +1134,7 @@ const SurahViewer = (() => {
         if (bar) positionFloatingElement(bar);
       });
       observer.observe(audioPlayerEl, { attributes: true, attributeFilter: ['class'] });
+      observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     }
 
     // Listen for ayah changes from audio player
@@ -853,11 +1148,21 @@ const SurahViewer = (() => {
         // Account for the fixed header + fixed nav at the top and the
         // audio player at the bottom so the verse is not judged "visible"
         // while it is actually hidden behind those fixed elements.
+        // In immersive reading the chrome hides behind body classes
+        // (ImmersiveReader) — only OPEN chrome covers the verse.
+        const immersive = document.body.classList.contains('immersive-read');
+        const immersiveBottomOpen = immersive &&
+          document.body.classList.contains('immersive-bottom-open');
+        const immersiveTopOpen = immersive &&
+          document.body.classList.contains('immersive-top-open');
         const header = document.querySelector('.app-header');
         const fixedNav = document.querySelector('#fixed-nav.visible');
-        const topOffset =
-          (header?.offsetHeight || 0) + (fixedNav?.offsetHeight || 0) + 12;
-        const audioPlayer = document.querySelector('.audio-player.visible');
+        const topOffset = immersive
+          ? (immersiveTopOpen ? (header?.offsetHeight || 0) + (fixedNav?.offsetHeight || 0) + 12 : 0)
+          : (header?.offsetHeight || 0) + (fixedNav?.offsetHeight || 0) + 12;
+        const audioPlayer = immersive
+          ? (immersiveBottomOpen ? document.querySelector('.audio-player.visible') : null)
+          : document.querySelector('.audio-player.visible');
         const bottomOffset = audioPlayer?.offsetHeight || 0;
 
         const rect = target.getBoundingClientRect();
@@ -885,6 +1190,24 @@ const SurahViewer = (() => {
 
       const ayahId = parseInt(verse.dataset.ayah);
       if (isNaN(ayahId)) return;
+
+      // A verse on a rebuilt mushaf page that belongs to a NEIGHBOUR surah:
+      // selection, audio and copy all resolve against the CURRENT surah's
+      // data, so they would misbehave. Navigate to the owning surah instead.
+      const mushafSection = verse.closest('.page-section[data-mushaf]');
+      if (mushafSection && !currentSurahVerses.some(v => v.id === ayahId)) {
+        for (const data of pageSurahsData(mushafSection)) {
+          const idx = data.verses?.findIndex(v => v.id === ayahId) ?? -1;
+          if (idx >= 0) {
+            window._pendingAyahScroll = idx + 1;
+            const targetHash = `#surah/${data.surah_id}`;
+            if (window.location.hash === targetHash) loadSurah(data.surah_id);
+            else window.location.hash = targetHash;
+            break;
+          }
+        }
+        return;
+      }
 
       // Ctrl/Cmd+Shift+Click → enter mode anchored here, or extend range from
       // the anchor to this verse. Safe: modifier-click defaults in browsers
@@ -1027,6 +1350,10 @@ const SurahViewer = (() => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       const ayahId = parseInt(verse.dataset.ayah);
       if (isNaN(ayahId)) return;
+      // Neighbour-surah verses on a rebuilt mushaf page navigate on tap
+      // (see click handler) — never enter selection mode here.
+      if (verse.closest('.page-section[data-mushaf]') &&
+          !currentSurahVerses.some(v => v.id === ayahId)) return;
       pressOrigin = { x: e.clientX, y: e.clientY };
       pressTimer = setTimeout(() => {
         pressTimer = null;
@@ -1063,6 +1390,13 @@ const SurahViewer = (() => {
     // Contextual copy actions rendered by PageRenderer (re-built each surah,
     // so these are delegated): copy whole surah / copy a single mushaf page
     document.addEventListener('click', async (e) => {
+      // Failed spread placeholder → jump to the owning surah
+      const goBtn = e.target.closest('[data-goto-surah]');
+      if (goBtn) {
+        window.location.hash = `#surah/${goBtn.dataset.gotoSurah}`;
+        return;
+      }
+
       const surahBtn = e.target.closest('.copy-surah-btn');
       if (surahBtn && currentSurahVerses.length) {
         const ids = currentSurahVerses.map(v => v.id);
@@ -1084,10 +1418,20 @@ const SurahViewer = (() => {
           .map(el => parseInt(el.dataset.ayah))
           .filter(n => !isNaN(n));
         if (!ids.length) return;
+        // Rebuilt mushaf pages span one or more surahs; the flat pages and
+        // this surah's own pages resolve against the current surah.
+        let srcVerses = currentSurahVerses;
+        let srcName = currentSurahData?.name_arabic || '';
+        if (section.dataset.mushaf) {
+          const list = pageSurahsData(section);
+          srcVerses = [];
+          list.forEach(d => { if (d.verses) srcVerses = srcVerses.concat(d.verses); });
+          srcName = list.map(d => d.name_arabic || '').filter(Boolean).join(' - ');
+        }
         await VerseClipboard.copyVerseSet(
           ids,
-          currentSurahVerses,
-          currentSurahData?.name_arabic || '',
+          srcVerses,
+          srcName,
           `تم نسخ الصفحة ${VerseClipboard.toArabicDigits(pageNumber)} · ${VerseClipboard.formatAyahCount(ids.length)}`
         );
       }
@@ -1180,6 +1524,19 @@ const SurahViewer = (() => {
   }
 
   /**
+   * Spread-mode side indicator: shows the opening range "a - b" and tracks
+   * the anchor (odd/right page) as the current page for bookmarks/resume.
+   */
+  function setSpreadIndicator(anchor, second, prevBtn, nextBtn, pageNumDisplay) {
+    if (isNaN(anchor) || anchor < 1 || anchor > 604) return;
+    currentPageNumber = anchor;
+    lastSeenPage = anchor;
+    pageNumDisplay.textContent = second ? `${anchor} - ${second}` : `${anchor}`;
+    prevBtn.disabled = anchor <= 1;
+    nextBtn.disabled = (second || anchor) >= 604;
+  }
+
+  /**
    * Setup page navigation buttons with Intersection Observer
    */
   function setupPageNavigation() {
@@ -1192,18 +1549,36 @@ const SurahViewer = (() => {
     const nextBtn = document.getElementById('btn-next-page');
     const pageNumDisplay = document.getElementById('page-nav-current');
     const setPage = (n) => setSidePageIndicator(n, prevBtn, nextBtn, pageNumDisplay);
+    const setSpread = (a, b) => setSpreadIndicator(a, b, prevBtn, nextBtn, pageNumDisplay);
+    const spreadOn = isSpreadMode();
 
     // Reset to the first mushaf page of THIS surah (not hardcoded 1:
     // e.g. Al-Baqarah starts at page 2) — or straight to a pending
     // cross-surah jump target so the counter never flashes an
     // intermediate value before the instant jump lands.
-    const firstSection = document.querySelector('.page-section[data-page-number]');
     const pendingPage = parseInt(window._pendingPageScroll);
-    setPage(
-      (!isNaN(pendingPage) && pendingPage >= 1 && pendingPage <= 604)
-        ? pendingPage
-        : (parseInt(firstSection?.dataset.pageNumber) || 1)
-    );
+    const hasPending = !isNaN(pendingPage) && pendingPage >= 1 && pendingPage <= 604;
+    if (spreadOn) {
+      const firstRow = document.querySelector('.spread-row[data-anchor]');
+      const [pAnchor, pSecond] = spreadForPage(hasPending ? pendingPage : 1);
+      if (hasPending) {
+        setSpread(pAnchor, pSecond);
+      } else if (firstRow) {
+        setSpread(parseInt(firstRow.dataset.anchor), parseInt(firstRow.dataset.second) || null);
+      } else {
+        const firstSection = document.querySelector('.page-section[data-page-number]');
+        const n = parseInt(firstSection?.dataset.pageNumber) || 1;
+        const [a, b] = spreadForPage(n);
+        setSpread(a, b);
+      }
+    } else {
+      const firstSection = document.querySelector('.page-section[data-page-number]');
+      setPage(
+        hasPending
+          ? pendingPage
+          : (parseInt(firstSection?.dataset.pageNumber) || 1)
+      );
+    }
 
     // Track the page under a thin "reading line" just below the fixed
     // header/nav (top-anchored band). The old centered 20% band
@@ -1220,7 +1595,9 @@ const SurahViewer = (() => {
     const visibleSections = new Map();
     pageObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        const num = parseInt(entry.target.dataset.pageNumber);
+        // Spread mode observes rows (keyed by anchor); single mode observes pages
+        const key = spreadOn ? entry.target.dataset.anchor : entry.target.dataset.pageNumber;
+        const num = parseInt(key);
         if (isNaN(num)) return;
         if (entry.isIntersecting) visibleSections.set(num, entry);
         else visibleSections.delete(num);
@@ -1236,15 +1613,21 @@ const SurahViewer = (() => {
         const top = entry.target.getBoundingClientRect().top;
         if (top < winnerTop) { winnerTop = top; winner = entry; }
       });
-      const pageNum = parseInt(winner.target.dataset.pageNumber);
-      if (pageNum !== currentPageNumber) setPage(pageNum);
+      if (spreadOn) {
+        const anchor = parseInt(winner.target.dataset.anchor);
+        const second = parseInt(winner.target.dataset.second) || null;
+        if (anchor !== currentPageNumber) setSpread(anchor, second);
+      } else {
+        const pageNum = parseInt(winner.target.dataset.pageNumber);
+        if (pageNum !== currentPageNumber) setPage(pageNum);
+      }
     }, {
       rootMargin: `-${topInset}px 0px -60% 0px`,
       threshold: 0
     });
 
-    // Observe all page sections
-    document.querySelectorAll('.page-section').forEach(section => {
+    // Observe all page sections (or spread rows in spread mode)
+    document.querySelectorAll(spreadOn ? '.spread-row' : '.page-section').forEach(section => {
       pageObserver.observe(section);
     });
 
@@ -1253,9 +1636,31 @@ const SurahViewer = (() => {
     // the observer confirms on arrival. If the target page is not in
     // this surah (e.g. past its last page), fall back to cross-surah
     // navigation instead of leaving the counter out of sync.
+    // Spread mode turns whole leaves: anchor ±2 (odd anchors 1..603).
     const hasPage = (n) =>
       !!document.querySelector(`.page-section[data-page-number="${n}"]`);
+    const hasSpread = (anchor) =>
+      !!document.querySelector(`.spread-row[data-anchor="${anchor}"]`);
+    const scrollToSpread = (anchor) => {
+      const row = document.querySelector(`.spread-row[data-anchor="${anchor}"]`);
+      if (!row) return false;
+      row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return true;
+    };
     prevBtn.onclick = () => {
+      if (isSpreadMode()) {
+        if (currentPageNumber > 1) {
+          const target = Math.max(1, currentPageNumber - 2);
+          const [anchor, second] = spreadForPage(target);
+          if (hasSpread(anchor)) {
+            setSpread(anchor, second);
+            scrollToSpread(anchor);
+          } else {
+            goToPage(anchor);
+          }
+        }
+        return;
+      }
       if (currentPageNumber > 1) {
         const target = currentPageNumber - 1;
         if (hasPage(target)) {
@@ -1268,6 +1673,19 @@ const SurahViewer = (() => {
     };
 
     nextBtn.onclick = () => {
+      if (isSpreadMode()) {
+        if (currentPageNumber < 604) {
+          const target = Math.min(603, currentPageNumber + 2);
+          const [anchor, second] = spreadForPage(target);
+          if (hasSpread(anchor)) {
+            setSpread(anchor, second);
+            scrollToSpread(anchor);
+          } else {
+            goToPage(anchor);
+          }
+        }
+        return;
+      }
       if (currentPageNumber < 604) {
         const target = currentPageNumber + 1;
         if (hasPage(target)) {
@@ -1451,6 +1869,11 @@ const SurahViewer = (() => {
     scrollToPage,
     scrollToAyah,
     showPageNavButtons,
-    hidePageNavButtons
+    hidePageNavButtons,
+    isSpreadMode,
+    refreshSpreadLayout,
+    buildSpreadLayout,
+    flattenSpreadLayout,
+    setupPageNavigation
   };
 })();
