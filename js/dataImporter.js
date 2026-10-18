@@ -72,6 +72,7 @@ const DataImporter = (() => {
           verses,
           page_breaks: computePageBreaks(verses)
         };
+        if (typeof PageMap !== 'undefined') PageMap.applyPageFixes(surahData);
         await DataStore.saveSurah(surahData);
         return surahData;
       } catch (err) {

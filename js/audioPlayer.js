@@ -23,6 +23,7 @@ const AudioPlayer = (() => {
   let surahVerses = [];
   let sessionPlayedAny = false; // has any ayah successfully started in this session?
   let consecutiveErrors = 0;    // errors with no successful playback between them
+  let errorSkipTimer = null;    // pending "skip to next after an error" timer
 
   let playerEl = null;
   let playBtn = null;
@@ -69,6 +70,13 @@ const AudioPlayer = (() => {
       return rangeStart;
     }
     return 1;
+  }
+
+  function clearErrorSkipTimer() {
+    if (errorSkipTimer) {
+      clearTimeout(errorSkipTimer);
+      errorSkipTimer = null;
+    }
   }
 
   function globalToLocal(globalId) {
@@ -214,8 +222,18 @@ const AudioPlayer = (() => {
 
       // Genuine isolated failure (e.g. a single missing file) — skip to next.
       if (playMode !== 'ayah' && currentAyahId < totalAyahs) {
-        setTimeout(() => {
-          playAyahLocal(currentAyahId + 1);
+        const skipSurahId = currentSurahId;
+        const skipFromAyah = currentAyahId;
+        clearErrorSkipTimer();
+        errorSkipTimer = setTimeout(() => {
+          errorSkipTimer = null;
+          // Bail if the reader/audio moved on (different surah or ayah)
+          // while this timer was pending — never start another surah's ayah.
+          if (currentSurahId !== skipSurahId || currentAyahId !== skipFromAyah) return;
+          const end = (typeof getEffectiveEnd === 'function') ? getEffectiveEnd() : totalAyahs;
+          const next = skipFromAyah + 1;
+          if (next > end || next > totalAyahs) return;
+          playAyahLocal(next);
         }, 500);
       }
     });
@@ -238,6 +256,7 @@ const AudioPlayer = (() => {
     isPlaying = false;
     sessionPlayedAny = false;
     consecutiveErrors = 0;
+    clearErrorSkipTimer();
 
     rangeStart = null;
     rangeEnd = null;
@@ -494,6 +513,7 @@ const AudioPlayer = (() => {
   }
 
   function stop() {
+    clearErrorSkipTimer();
     if (audioEl) {
       audioEl.pause();
       audioEl.removeAttribute('src');

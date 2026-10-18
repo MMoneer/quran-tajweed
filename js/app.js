@@ -29,10 +29,17 @@ const App = (() => {
     const isHttp = window.location.protocol === 'http:' ||
       window.location.protocol === 'https:';
     if ('serviceWorker' in navigator && isHttp) {
-      window.addEventListener('load', () => {
+      const registerSW = () => {
         navigator.serviceWorker.register('./sw.js', { scope: './' })
           .catch((e) => console.error('SW registration failed:', e));
-      });
+      };
+      // Register immediately if the load event already fired (it can during the
+      // await above); otherwise wait for it.
+      if (document.readyState === 'complete') {
+        registerSW();
+      } else {
+        window.addEventListener('load', registerSW);
+      }
       // When a new SW activates (skipWaiting + clients.claim), the open page
       // may still be running STALE js from the old cache (static assets are
       // cache-first while navigation is network-first, so index.html can be

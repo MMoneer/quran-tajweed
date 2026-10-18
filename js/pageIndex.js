@@ -41,7 +41,7 @@ const PageIndex = (() => {
   async function build() {
     if (cached) return cached;
     if (building) return building;
-    building = (async () => {
+    const pending = (async () => {
       if (typeof DataStore === 'undefined'
           || typeof DataStore.getSurah !== 'function'
           || typeof DataStore.getImportedSurahIds !== 'function') {
@@ -57,6 +57,7 @@ const PageIndex = (() => {
       const ayahToPage = [];
       const surahStartPages = [];
       const pageRanges = new Map();
+      let indexedSurahs = 0;
       for (const id of ids) {
         let surahData = null;
         try {
@@ -65,6 +66,8 @@ const PageIndex = (() => {
           continue;
         }
         if (!surahData || !Array.isArray(surahData.verses)) continue;
+        indexedSurahs += 1;
+        if (typeof PageMap !== 'undefined') PageMap.applyPageFixes(surahData);
         const pagePerAyah = extractPagePerAyah(surahData.verses);
         ayahToPage[id] = pagePerAyah;
         if (pagePerAyah.length > 0) {
@@ -96,14 +99,30 @@ const PageIndex = (() => {
           i = j;
         }
       }
-      cached = {
+      const result = {
         ayahToPage,
         surahStartPages,
         pageRanges,
       };
-      return cached;
+      // Memoize only a build that actually indexed at least one surah. An
+      // all-empty result (nothing imported yet) must NOT be cached, or
+      // page-based planning stays dead for the whole session even after an
+      // import adds surahs. Returning it uncached lets the next call retry.
+      if (indexedSurahs > 0) {
+        cached = result;
+      }
+      return result;
     })();
-    return building;
+    building = pending;
+    // Clear the in-flight marker once the build settles, success or failure,
+    // so a failed (or all-empty) build never poisons `building`. Handlers are
+    // attached after the assignment so a synchronously-settled body cannot
+    // clear the marker before it is stored.
+    pending.then(
+      () => { if (building === pending) building = null; },
+      () => { if (building === pending) building = null; }
+    );
+    return pending;
   }
 
   function getCached() {

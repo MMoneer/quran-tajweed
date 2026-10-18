@@ -33,6 +33,17 @@ const SurahViewer = (() => {
   let swipeOverlay = null;
   let swipeHintLeft = null;
   let swipeHintRight = null;
+  // Bound swipe listeners + pending navigation timer, tracked so cleanup can
+  // remove them (the container outlives the reader view, so leaked listeners
+  // would accumulate on every re-entry).
+  let swipeContainer = null;
+  let swipeHandlers = null;
+  let swipeNavTimer = null;
+
+  // Two-page spread: gap after an edge-triggered cross-surah jump during
+  // which further wheel events are ignored (the next surah is loading).
+  const SPREAD_EDGE_LOCK_MS = 700;
+  let spreadEdgeNavAt = 0;
 
   /**
    * Initialize reader view for a specific Surah
@@ -111,6 +122,7 @@ const SurahViewer = (() => {
       // Setup navigation listeners
       setupNavigationListeners();
       setupSwipeNavigation();
+      setupSpreadEdgeNavigation();
       
       // Load audio player for this surah (with optional start ayah)
       const startAyah = window._pendingAyahScroll || 1;
@@ -523,6 +535,13 @@ const SurahViewer = (() => {
   function findSurahForPage(pageNumber) {
     if (pageNumber < 1 || pageNumber > 604) return currentSurahId;
 
+    // A shared page starts several surahs; the reader belongs to the FIRST
+    // surah that has verses on it (e.g. page 600 -> 100, not 102).
+    if (typeof PageMap !== 'undefined' && typeof PageMap.surahsOnPage === 'function') {
+      const owners = PageMap.surahsOnPage(pageNumber);
+      if (owners.length) return owners[0];
+    }
+
     for (let i = SURAH_START_PAGES.length - 1; i >= 0; i--) {
       if (SURAH_START_PAGES[i] <= pageNumber) {
         return i + 1;
@@ -867,6 +886,9 @@ const SurahViewer = (() => {
     // Leaving the reader counts as a "stop": save last seen page first
     // (before currentSurahData is cleared below).
     flushReadingPosition();
+    // Invalidate any in-flight load: a late-resolving fetch must not render
+    // into the now-hidden section or toggle global nav/audio.
+    loadGeneration++;
     lastSeenPage = null;
     exitSelectionMode();
     currentSurahData = null;
@@ -897,7 +919,7 @@ const SurahViewer = (() => {
       swipeHintRight = null;
     }
     document.body.classList.remove('swipe-active');
-    window._swipeNavSetup = false;
+    teardownSwipeNavigation();
   }
 
   /**
@@ -1714,10 +1736,11 @@ const SurahViewer = (() => {
 
   function setupSwipeNavigation() {
     if (window._swipeNavSetup) return;
-    window._swipeNavSetup = true;
 
     const container = document.getElementById('surah-content-container');
     if (!container) return;
+    window._swipeNavSetup = true;
+    swipeContainer = container;
 
     // Create overlay element
     swipeOverlay = document.createElement('div');
@@ -1738,7 +1761,7 @@ const SurahViewer = (() => {
     const THRESHOLD = 80;
     const MAX_DRAG = 200;
 
-    container.addEventListener('touchstart', (e) => {
+    const onTouchStart = (e) => {
       if (e.touches.length !== 1) return;
       const touch = e.touches[0];
       swipeStartX = touch.clientX;
@@ -1746,9 +1769,9 @@ const SurahViewer = (() => {
       swipeDeltaX = 0;
       isSwiping = false;
       container.classList.remove('swiping', 'snapping-back');
-    }, { passive: true });
+    };
 
-    container.addEventListener('touchmove', (e) => {
+    const onTouchMove = (e) => {
       if (e.touches.length !== 1) return;
       if (selectionMode) return;
       const touch = e.touches[0];
@@ -1798,9 +1821,9 @@ const SurahViewer = (() => {
         swipeHintLeft.classList.remove('visible');
         swipeHintRight.classList.remove('visible');
       }
-    }, { passive: false });
+    };
 
-    container.addEventListener('touchend', (e) => {
+    const onTouchEnd = (e) => {
       if (!isSwiping) return;
 
       isSwiping = false;
@@ -1824,7 +1847,8 @@ const SurahViewer = (() => {
           container.style.transform = `translateX(${slideOut}px)`;
           container.style.opacity = '0.5';
 
-          setTimeout(() => {
+          swipeNavTimer = setTimeout(() => {
+            swipeNavTimer = null;
             container.style.transform = '';
             container.style.opacity = '';
             container.classList.remove('swiping');
@@ -1836,9 +1860,9 @@ const SurahViewer = (() => {
       } else {
         snapBack(container);
       }
-    }, { passive: true });
+    };
 
-    container.addEventListener('touchcancel', () => {
+    const onTouchCancel = () => {
       if (!isSwiping) return;
       isSwiping = false;
       document.body.classList.remove('swipe-active');
@@ -1846,7 +1870,127 @@ const SurahViewer = (() => {
       swipeHintLeft.classList.remove('visible');
       swipeHintRight.classList.remove('visible');
       snapBack(container);
+    };
+
+    swipeHandlers = {
+      touchstart: onTouchStart,
+      touchmove: onTouchMove,
+      touchend: onTouchEnd,
+      touchcancel: onTouchCancel
+    };
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd, { passive: true });
+    container.addEventListener('touchcancel', onTouchCancel, { passive: true });
+  }
+
+  /**
+   * Remove the swipe listeners and cancel any pending swipe navigation.
+   * The container persists across reader views, so without this every
+   * re-entry would add another listener set; the tracked timer is also
+   * cleared so it cannot navigate after the reader is left.
+   */
+  function teardownSwipeNavigation() {
+    if (swipeContainer && swipeHandlers) {
+      swipeContainer.removeEventListener('touchstart', swipeHandlers.touchstart);
+      swipeContainer.removeEventListener('touchmove', swipeHandlers.touchmove);
+      swipeContainer.removeEventListener('touchend', swipeHandlers.touchend);
+      swipeContainer.removeEventListener('touchcancel', swipeHandlers.touchcancel);
+      swipeContainer.style.transform = '';
+      swipeContainer.style.opacity = '';
+      swipeContainer.classList.remove('swiping', 'snapping-back');
+    }
+    swipeContainer = null;
+    swipeHandlers = null;
+    if (swipeNavTimer) {
+      clearTimeout(swipeNavTimer);
+      swipeNavTimer = null;
+    }
+    window._swipeNavSetup = false;
+  }
+
+  /**
+   * Two-page spread only: continuous reading across surah boundaries via
+   * the mouse wheel. When the reader rests on the LAST opening of the
+   * surah and the user scrolls down (deltaY > 0), jump to the next mushaf
+   * page (it belongs to the next surah, so goToPage reloads the reader and
+   * lands on it). The mirror happens on the FIRST opening scrolling up.
+   *
+   * Arrow Down/Up drive the same page-turn: they delegate to the side
+   * page buttons (which already turn one opening and cross surahs at the
+   * edges), so keyboard matches the mouse exactly.
+   *
+   * Single-page mode is deliberately untouched: there the reader still
+   * stops at the surah's end. Bound listeners are added once; the
+   * handlers are inert unless spread mode is actually rendering.
+   */
+  function setupSpreadEdgeNavigation() {
+    if (window._spreadEdgeNavSetup) return;
+    window._spreadEdgeNavSetup = true;
+
+    const OVERLAY_SELECTOR =
+      '.settings-drawer, .modal-overlay, .header-dropdown, ' +
+      '.part-dropdown-panel, .part-dropdown-list';
+    const FIELD_SELECTOR =
+      'input, textarea, select, [contenteditable="true"]';
+
+    window.addEventListener('wheel', (e) => {
+      if (e.deltaY === 0) return;
+      if (!isSpreadMode()) return;
+      const reader = document.getElementById('surah-reader-section');
+      if (!reader || !reader.classList.contains('active')) return;
+      // Wheel inside an own-scrolling overlay must stay there.
+      if (e.target && e.target.closest && e.target.closest(OVERLAY_SELECTOR)) return;
+
+      const container = document.getElementById('surah-content-container');
+      const rows = container ? container.querySelectorAll('.spread-row') : null;
+      if (!rows || !rows.length) return;
+      const firstRow = rows[0];
+      const lastRow = rows[rows.length - 1];
+      const firstAnchor = parseInt(firstRow.dataset.anchor);
+      const lastAnchor = parseInt(lastRow.dataset.anchor);
+      if (isNaN(firstAnchor) || isNaN(lastAnchor)) return;
+      // Last page actually shown by the final opening (its second page when
+      // it has one), so a shared boundary page isn't "next" again.
+      const lastVisible = parseInt(lastRow.dataset.second) || lastAnchor;
+
+      const now = Date.now();
+      if (now - spreadEdgeNavAt < SPREAD_EDGE_LOCK_MS) return;
+
+      if (e.deltaY > 0 && currentPageNumber >= lastAnchor) {
+        const next = lastVisible + 1;
+        if (next <= 604) {
+          spreadEdgeNavAt = now;
+          goToPage(next);
+        }
+      } else if (e.deltaY < 0 && currentPageNumber <= firstAnchor) {
+        const prev = firstAnchor - 1;
+        if (prev >= 1) {
+          spreadEdgeNavAt = now;
+          goToPage(prev);
+        }
+      }
     }, { passive: true });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (!isSpreadMode() || selectionMode) return;
+      const reader = document.getElementById('surah-reader-section');
+      if (!reader || !reader.classList.contains('active')) return;
+      // An open drawer/modal keeps the keyboard to itself.
+      const drawer = document.getElementById('settings-drawer');
+      if (drawer && drawer.classList.contains('open')) return;
+      const t = e.target;
+      if (t && t.closest && t.closest(FIELD_SELECTOR + ', ' + OVERLAY_SELECTOR)) return;
+
+      const btn = document.getElementById(
+        e.key === 'ArrowDown' ? 'btn-next-page' : 'btn-prev-page'
+      );
+      if (!btn || btn.disabled) return;
+      e.preventDefault();
+      btn.click();
+    });
   }
 
   function snapBack(container) {

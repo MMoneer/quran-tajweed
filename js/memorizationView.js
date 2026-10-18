@@ -402,9 +402,13 @@ const MemorizationView = (() => {
     } catch (e) {
       /* private mode etc — non-fatal */
     }
-    try {
-      window.dispatchEvent(new Event('quran_memorization_state_changed'));
-    } catch (e) { /* ignore */ }
+    // NOTE: we deliberately do NOT dispatch `quran_memorization_state_changed`
+    // in this window. The only in-window listener (reloadFromStorage) would
+    // reload the just-persisted state from IDB — stripping `_undoSnapshot`
+    // and re-rendering, which clears the undo toast and makes "تراجع"
+    // impossible. Every caller renders itself after emitting, and other tabs
+    // are notified via the `storage` event fired by the localStorage write
+    // above. Re-introducing a same-window dispatch would break the undo flow.
   }
 
   // ---------------------------------------------------------------------
@@ -1481,6 +1485,20 @@ const MemorizationView = (() => {
       return;
     }
 
+    // A backup produced by a NEWER app version must not be migrated DOWN:
+    // migration would silently drop fields this build does not understand.
+    // Refuse it outright and tell the user to update the app first.
+    if (parsed && typeof parsed.version === 'number'
+        && parsed.version > BackupValidator.SCHEMA_VERSION) {
+      if (feedback) {
+        feedback.textContent = 'نسخة أحدث من هذه النسخة من التطبيق';
+        feedback.classList.remove('success');
+        feedback.classList.add('error');
+      }
+      input.value = '';
+      return;
+    }
+
     // Migrate legacy shapes first, then run the strict validator.
     let candidate = parsed;
     if (parsed && parsed.version !== BackupValidator.SCHEMA_VERSION) {
@@ -1511,27 +1529,42 @@ const MemorizationView = (() => {
       return;
     }
 
-    // Roll day forward on the imported state so the user lands on today.
-    state = result.sanitizedData;
-    MemorizationEngine.ensureCurrentDay(state);
+    // Snapshot the live state and build the candidate from the sanitized
+    // import. `ensureCurrentDay` runs on the CANDIDATE, never on the live
+    // module state, so nothing in memory changes until the write is durable.
+    const previousState = state;
+    const importedState = result.sanitizedData;
+    MemorizationEngine.ensureCurrentDay(importedState);
     await ensureSurahNameMap();
     try {
-      await adapter.saveState(state);
-      emitCrossTabUpdate();
-      if (feedback) {
-        feedback.textContent = 'تم استيراد النسخة الاحتياطية بنجاح.';
-        feedback.classList.remove('error');
-        feedback.classList.add('success');
-      }
-      showTransientToast('تم استيراد النسخة الاحتياطية.');
-      render();
+      await adapter.saveState(importedState);
     } catch (e) {
+      // Save failed — leave the previous state exactly as it was (never
+      // render an unpersisted import) and show the existing failure copy.
       console.error('MemorizationView: import save failed', e);
+      state = previousState;
       if (feedback) {
         feedback.textContent = 'تم التحقق من الملف لكن تعذر حفظه محلياً.';
+        feedback.classList.remove('success');
         feedback.classList.add('error');
       }
+      input.value = '';
+      return;
     }
+
+    // Durable: it is now safe to adopt the imported state.
+    state = importedState;
+    emitCrossTabUpdate();
+    // The page → ayah index was built from the previous surah set; drop it
+    // so the next build sees the imported surahs.
+    if (typeof PageIndex !== 'undefined') PageIndex.reset();
+    if (feedback) {
+      feedback.textContent = 'تم استيراد النسخة الاحتياطية بنجاح.';
+      feedback.classList.remove('error');
+      feedback.classList.add('success');
+    }
+    showTransientToast('تم استيراد النسخة الاحتياطية.');
+    render();
     input.value = '';
   }
 

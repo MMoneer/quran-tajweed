@@ -887,12 +887,21 @@ const MemorizationEngine = ((QuranMetaService, DateUtils) => {
     const cohortSize = cohort.length;
     // "Backlog" = overdue items not in today's frozen cohort.
     const backlogCount = Math.max(0, overdueCount - cohortSize);
+    // A streak is only alive while its last completed day is today or
+    // yesterday (local calendar). Otherwise the stored `currentStreak` is
+    // stale (e.g. 30 idle days) and we report 0. We deliberately do not
+    // mutate `state` here: `longestStreak` keeps the historical maximum and
+    // `tryAdvanceStreak` already restarts the streak on a gap.
+    const lastCompletedDay = state.stats.lastCompletedDay;
+    const streakIsLive = typeof lastCompletedDay === 'string'
+      && (DateUtils.isToday(lastCompletedDay) || DateUtils.isYesterday(lastCompletedDay));
+    const reportedStreak = streakIsLive ? state.stats.currentStreak : 0;
     return {
       totalMemorizedAyahs: computeTotalMemorizedAyahs(state),
       completedJuz: computeCompletedJuz(state),
       byStatus: computeStatusCounts(state),
       totalReviews: state.stats.totalReviews,
-      currentStreak: state.stats.currentStreak,
+      currentStreak: reportedStreak,
       longestStreak: state.stats.longestStreak,
       dueReviewCount: cohortSize,
       backlogCount,

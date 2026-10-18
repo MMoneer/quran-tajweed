@@ -4709,7 +4709,7 @@ body.light-theme .memorization-backlog-alert {
   max-width: 420px;
   width: 92vw;
   background: var(--bg-card, #ffffff);
-  color: var(--text-primary, #222222);
+  color: var(--text-main);
   direction: rtl;
 }
 .plan-editor-modal::backdrop {

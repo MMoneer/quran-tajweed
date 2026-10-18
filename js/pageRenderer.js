@@ -40,32 +40,40 @@ const PageRenderer = (() => {
   function mergeTajweedToQPC(qpcText, tajweedHtml) {
     if (!tajweedHtml) return qpcText;
 
-    // Extract char+rule pairs from tajweed HTML using regex
-    // API format: <rule class=ham_wasl>text</rule> (NO quotes on attribute)
+    // Extract char+rule pairs from the tajweed markup with a structural
+    // parse. API format: <rule class=ham_wasl>text</rule> (NO quotes on the
+    // attribute), and rules NEST: the live 2:2 shape is
+    //   ذ<rule class=madda_normal><rule class=custom-alef-maksora>ٰ</rule></rule>لِكَ
+    // A regex that grabs text up to the first </rule> swallows the inner
+    // opening tag as literal text and drops the inner rule. Instead track a
+    // stack of open rules: every character inherits the innermost open rule,
+    // and no markup character ever becomes an entry.
     const charRules = [];
-    const ruleRegex = /<rule\s+class=([^\s>]+)>([\s\S]*?)<\/rule>|<tajweed\s+class=([^\s>]+)>([\s\S]*?)<\/tajweed>|([^<]+)/g;
+    const openRules = [];
+    const tagRegex = /<(\/?)(?:rule|tajweed)(?:\s+class=([^\s>]+))?\s*>/g;
+    let last = 0;
     let match;
 
-    while ((match = ruleRegex.exec(tajweedHtml)) !== null) {
-      if (match[1] !== undefined) {
-        // <rule class=...> tag
-        const rule = match[1];
-        for (const ch of match[2]) {
-          charRules.push({ char: ch, rule });
-        }
-      } else if (match[3] !== undefined) {
-        // <tajweed class=...> tag
-        const rule = match[3];
-        for (const ch of match[4]) {
-          charRules.push({ char: ch, rule });
-        }
-      } else if (match[5] !== undefined) {
-        // Plain text
-        for (const ch of match[5]) {
-          charRules.push({ char: ch, rule: null });
-        }
+    const takeText = (text) => {
+      const rule = openRules.length ? openRules[openRules.length - 1] : null;
+      for (const ch of text) {
+        // Markup characters must never become entries (defensive: a stray or
+        // malformed tag would otherwise be taken as text).
+        if (ch === '<' || ch === '>') continue;
+        charRules.push({ char: ch, rule });
+      }
+    };
+
+    while ((match = tagRegex.exec(tajweedHtml)) !== null) {
+      takeText(tajweedHtml.slice(last, match.index));
+      last = tagRegex.lastIndex;
+      if (match[1] === '/') {
+        if (openRules.length) openRules.pop();
+      } else {
+        openRules.push(match[2] || null);
       }
     }
+    takeText(tajweedHtml.slice(last));
 
     // Character classification helpers (inlined for performance)
     const DIACRITIC_RANGES = [
@@ -96,14 +104,23 @@ const PageRenderer = (() => {
       return code >= HARAKAT_RANGE[0] && code <= HARAKAT_RANGE[1];
     }
 
-    // Match QPC chars to tajweed rules
+    // Match QPC chars to tajweed rules. Whitespace/ZWNJ and the rub-el-hizb
+    // mark (U+06DE) occur in either stream but carry no rule: skip them on
+    // BOTH sides so they never consume a real character's rule.
     const qpcChars = qpcText;
     const qpcLen = qpcChars.length;
     const rules = new Array(qpcLen).fill(null);
     let ri = 0;
 
+    const isAlignIgnorable = (ch) =>
+      ch === '\u06DE' || ch === '\u200C' || /\s/.test(ch);
+
     for (let qi = 0; qi < qpcLen && ri < charRules.length; qi++) {
       const qc = qpcChars[qi];
+      if (isAlignIgnorable(qc)) continue;
+      while (ri < charRules.length && isAlignIgnorable(charRules[ri].char)) ri++;
+      if (ri >= charRules.length) break;
+
       const rc = charRules[ri].char;
       const qBase = baseChar(qc);
       const rBase = baseChar(rc);

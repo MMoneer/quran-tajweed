@@ -114,6 +114,8 @@ const QuranSearch = (() => {
     return applyAlifExceptions(
       text
         .replace(/[\u064B-\u0658\u0670\u06D6-\u06ED\u06E1]/g, '')
+        .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '')
+        .replace(/[\u060C\u061B\u061F\u06D4\u066A-\u066D]/g, '')
         .replace(/\u0640/g, '')
         .replace(/ؤ/g, 'و')
         .replace(/ئ/g, 'ي')

@@ -151,6 +151,11 @@ class IndexedDbAdapter {
         return;
       }
 
+      // Settle from the TRANSACTION, never from `req.onsuccess`. A request
+      // can succeed while the transaction is still aborted at commit time
+      // (e.g. quota exceeded), so resolving on the request would report a
+      // failed write as a durable save. The request-level error handler is
+      // kept so an early failure still rejects exactly once.
       let settled = false;
       function done(err) {
         if (settled) return;
@@ -159,13 +164,10 @@ class IndexedDbAdapter {
         else resolve();
       }
 
-      req.onsuccess = () => done();
       req.onerror = () => done(req.error || new Error('IndexedDbAdapter.saveState: request error'));
-      if (tx) {
-        tx.oncomplete = () => done();
-        tx.onerror = () => done(tx.error || req.error || new Error('IndexedDbAdapter.saveState: transaction error'));
-        tx.onabort = () => done(tx.error || new Error('IndexedDbAdapter.saveState: transaction aborted'));
-      }
+      tx.oncomplete = () => done();
+      tx.onerror = () => done(tx.error || req.error || new Error('IndexedDbAdapter.saveState: transaction error'));
+      tx.onabort = () => done(tx.error || new Error('IndexedDbAdapter.saveState: transaction aborted'));
     }));
   }
 

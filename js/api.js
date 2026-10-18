@@ -169,7 +169,11 @@ const QuranAPI = (() => {
     // 1. Try IndexedDB first (fastest, works for both modes)
     try {
       const idbSurah = await DataStore.getSurah(surahId);
-      if (idbSurah) return idbSurah;
+      if (idbSurah) {
+        return (typeof PageMap !== 'undefined')
+          ? PageMap.applyPageFixes(idbSurah)
+          : idbSurah;
+      }
     } catch (e) {
       console.warn(`IndexedDB getSurah(${surahId}) failed:`, e);
     }
@@ -226,6 +230,8 @@ const QuranAPI = (() => {
       verses: allVerses,
       page_breaks: pageBreaks
     };
+
+    if (typeof PageMap !== 'undefined') PageMap.applyPageFixes(surahData);
 
     // Save to IndexedDB for faster loads next time (localStorage has 5-10MB limit)
     try {

@@ -89,6 +89,12 @@ const FirstRunWizard = (() => {
     if (errorText) errorText.textContent = message;
     if (progressArea) progressArea.style.display = 'none';
     if (continueBtn) continueBtn.style.display = showContinue ? '' : 'none';
+    // showProgress() hid these; restore them so the recovery controls
+    // (retry / online-only) and the explanation are reachable again.
+    const actions = document.querySelector('.modal-actions');
+    const desc = document.querySelector('.modal-description');
+    if (actions) actions.style.display = 'flex';
+    if (desc) desc.style.display = 'block';
   }
 
   function onImport(callback) {

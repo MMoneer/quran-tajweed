@@ -1,4 +1,4 @@
-﻿const CACHE_VERSION = 'quran-pwa-v34';
+const CACHE_VERSION = 'quran-pwa-v36';
 
 // GUARDRAIL: every app asset that must work offline MUST be listed here, and
 // CACHE_VERSION must be bumped whenever any of these files changes. Any new
@@ -40,7 +40,6 @@ const PRECACHE = [
   'js/memorizationView.js',
   'js/bookmarks.js',
   'js/app.js',
-  'fonts/UthmanicHafs_V20.ttf',
   'fonts/UthmanicHafs_V22.ttf',
   'fonts/fontawesome/fa-brands-400.ttf',
   'fonts/fontawesome/fa-brands-400.woff2',
@@ -100,7 +99,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(
-        keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))
+        keys.filter((k) => k.startsWith('quran-pwa-') && k !== CACHE_VERSION).map((k) => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
