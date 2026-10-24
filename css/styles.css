@@ -2738,6 +2738,29 @@ body.light-theme .part-group-title {
 }
 
 /* ==========================================================================
+   Jump-target highlight — the verse a search result / bookmark just jumped
+   to, so it is obvious WHICH ayah the navigation landed on.
+   Presentation only: background + radius (no border/padding), because a
+   layout change here would shift the fitted page box right after the exact
+   page/opening jump. JS (surahView.js highlightAyah) removes the class
+   after a few seconds.
+   ========================================================================== */
+.verse.ayah-target {
+  background: rgba(212, 175, 55, 0.28);
+  border-radius: 6px;
+  animation: ayahTargetPulse 1.1s ease-in-out 3;
+}
+
+@keyframes ayahTargetPulse {
+  0%, 100% { background: rgba(212, 175, 55, 0.22); }
+  50% { background: rgba(212, 175, 55, 0.45); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verse.ayah-target { animation: none; }
+}
+
+/* ==========================================================================
    Verse Play Popup
    ========================================================================== */
 .verse {

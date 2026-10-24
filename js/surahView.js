@@ -18,6 +18,9 @@ const SurahViewer = (() => {
   // Two-page spread: borrowed adjacent-surah data cache (surahId -> surahData)
   // for cross-surah openings. Reset on every loadSurah.
   let spreadBorrowed = {};
+  // In-flight page rebuilds for the current spread layout (see
+  // whenLayoutSettled): cross-surah pages are filled asynchronously.
+  let spreadFillPromise = null;
 
   // Opt-in perf timing. Enable with `localStorage.setItem('quran-perf','1')`.
   function logPerf(msg) {
@@ -54,6 +57,7 @@ const SurahViewer = (() => {
     // silently, just reset for the new surah.
     lastSeenPage = null;
     spreadBorrowed = {};
+    spreadFillPromise = null;
     currentSurahId = parseInt(surahId);
     const generation = ++loadGeneration;
     
@@ -62,6 +66,7 @@ const SurahViewer = (() => {
     const headerInfo = document.getElementById('header-surah-info');
     
     // Reset view
+    clearAyahHighlight();
     container.innerHTML = '';
     loading.style.display = 'flex';
     headerInfo.innerHTML = '';
@@ -139,24 +144,27 @@ const SurahViewer = (() => {
       // Preload next/previous surahs in background for instant navigation
       preloadAdjacentSurahs(currentSurahId);
       
-      if (window._pendingAyahScroll) {
-        const targetAyah = window._pendingAyahScroll;
-        window._pendingAyahScroll = null;
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
+      // Cross-view jump target (search result, bookmark, page/part field).
+      // It is resolved only AFTER the layout settles: the auto-fit resizes
+      // every page box ~150ms after the render and spread pages are rebuilt
+      // asynchronously, so scrolling now would target geometry that is about
+      // to move (that is what landed ayah jumps a page too far).
+      const targetAyah = parseInt(window._pendingAyahScroll, 10);
+      const targetPage = parseInt(window._pendingPageScroll, 10);
+      window._pendingAyahScroll = null;
+      window._pendingPageScroll = null;
+
+      if (!isNaN(targetAyah) || !isNaN(targetPage)) {
+        whenLayoutSettled(generation).then((ready) => {
+          if (!ready) return;
+          // One frame so the settled layout is painted before it is measured.
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            if (generation !== loadGeneration) return;
             // Instant jump: a smooth scroll would sweep the page counter
             // through every intermediate page on the way to the target.
-            scrollToAyah(targetAyah, 'auto');
-          });
-        });
-      } else if (window._pendingPageScroll) {
-        const targetPage = window._pendingPageScroll;
-        window._pendingPageScroll = null;
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            // Instant jump (see above).
-            scrollToPage(targetPage, 'auto');
-          });
+            if (!isNaN(targetAyah)) scrollToAyah(targetAyah, 'auto');
+            else scrollToPage(targetPage, 'auto');
+          }));
         });
       } else {
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -355,7 +363,9 @@ const SurahViewer = (() => {
       frag.appendChild(row);
     }
     container.appendChild(frag);
-    fillBorrowedPages(gen);
+    // Rebuilds are async: a jump that lands on a borrowed page must wait
+    // for it (see whenLayoutSettled).
+    spreadFillPromise = fillBorrowedPages(gen);
   }
 
   /**
@@ -487,6 +497,70 @@ const SurahViewer = (() => {
     }
   }
 
+  /**
+   * Resolve when the page geometry of the CURRENT render is final:
+   * spread pages are rebuilt asynchronously (fillBorrowedPages) and the
+   * auto-fit resizes every page box ~150ms after the render. Jumping
+   * before that lands on the wrong page, because the snap points move
+   * underneath the scroll.
+   * @param {number} generation - loadSurah generation of the caller
+   * @returns {Promise<boolean>} false when the view changed meanwhile
+   */
+  async function whenLayoutSettled(generation) {
+    if (spreadFillPromise) {
+      try { await spreadFillPromise; } catch (e) { /* placeholders remain */ }
+    }
+    if (generation !== loadGeneration) return false;
+    if (typeof DynamicPage !== 'undefined' && typeof DynamicPage.whenSettled === 'function') {
+      await DynamicPage.whenSettled();
+    }
+    return generation === loadGeneration;
+  }
+
+  /**
+   * True while a single mushaf page (or opening) fills the screen: the
+   * auto-fit is applied, so pages ARE the reading unit and the column
+   * snaps to page starts. Spread always runs with the fit (settings force
+   * it), so the fit class alone is the authoritative signal.
+   */
+  function isPageFitMode() {
+    return document.body.classList.contains('dynamic-page-mode');
+  }
+
+  // How long the jump-target highlight stays on the verse.
+  const AYAH_HIGHLIGHT_MS = 6000;
+  let ayahHighlightTimer = null;
+
+  /**
+   * Remove the jump-target highlight (and its pending timer).
+   */
+  function clearAyahHighlight() {
+    if (ayahHighlightTimer) {
+      clearTimeout(ayahHighlightTimer);
+      ayahHighlightTimer = null;
+    }
+    document.querySelectorAll('.verse.ayah-target')
+      .forEach(el => el.classList.remove('ayah-target'));
+  }
+
+  /**
+   * Mark a verse as the jump destination, so it is obvious WHICH ayah a
+   * search result / bookmark landed on (.verse.ayah-target in styles.css).
+   * Purely visual (background only — no border/padding), so the page
+   * geometry the jump just targeted does not shift. Auto-clears after
+   * AYAH_HIGHLIGHT_MS so the mushaf page returns to its clean state.
+   * @param {HTMLElement} verseEl
+   */
+  function highlightAyah(verseEl) {
+    if (!verseEl) return;
+    clearAyahHighlight();
+    verseEl.classList.add('ayah-target');
+    ayahHighlightTimer = setTimeout(() => {
+      ayahHighlightTimer = null;
+      verseEl.classList.remove('ayah-target');
+    }, AYAH_HIGHLIGHT_MS);
+  }
+
   function scrollToPage(pageNumber, behavior = 'smooth') {
     const n = parseInt(pageNumber);
     if (isSpreadMode() && !isNaN(n)) {
@@ -513,6 +587,20 @@ const SurahViewer = (() => {
     }
     const verseEl = document.querySelector(`.verse[data-ayah="${globalId}"]`);
     if (verseEl) {
+      // Mark the destination so the user sees which ayah the jump landed on
+      // (visual only — no layout change, so the scroll below stays exact).
+      highlightAyah(verseEl);
+      // Page-fit modes (auto-fit page / two-page spread): one page IS one
+      // screen, so scrolling to the verse itself leaves the view unaligned
+      // with any page start (the page's own beginning, or the opening's
+      // other page, ends up above/below the fold) — and the mandatory page
+      // snap then pulls the view to a neighbouring page. Land on the page
+      // that contains the verse instead: the whole page, verse included, is
+      // already one screen tall.
+      if (isPageFitMode()) {
+        const page = parseInt(verseEl.closest('.page-section')?.dataset.pageNumber, 10);
+        if (!isNaN(page) && scrollToPage(page, behavior)) return true;
+      }
       const prevJuzDivider = verseEl.previousElementSibling;
       if (prevJuzDivider && prevJuzDivider.classList.contains('juz-divider')) {
         prevJuzDivider.scrollIntoView({ behavior, block: 'start' });
@@ -891,6 +979,7 @@ const SurahViewer = (() => {
     loadGeneration++;
     lastSeenPage = null;
     exitSelectionMode();
+    clearAyahHighlight();
     currentSurahData = null;
     AudioPlayer.stop();
     currentSurahVerses = [];

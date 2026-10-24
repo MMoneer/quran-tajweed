@@ -367,7 +367,57 @@ const DynamicPage = (() => {
     }
   }
 
+  // Callbacks registered by whenSettled(); released when no further pass
+  // is queued.
+  let settleWaiters = [];
+
+  /**
+   * Resolve once the fit pass that is currently scheduled (or running) has
+   * finished, so callers that need FINAL page geometry — an ayah/page jump
+   * coming from search or bookmarks — can target the fitted layout instead
+   * of the pre-fit one. Resolves immediately when the mode is off, and
+   * gives up after `timeoutMs` so a pending jump is never lost.
+   * @param {number} [timeoutMs]
+   * @returns {Promise<void>}
+   */
+  function whenSettled(timeoutMs = 1500) {
+    if (!isEnabled()) return Promise.resolve();
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      settleWaiters.push(finish);
+      setTimeout(finish, timeoutMs);
+    });
+  }
+
+  function flushSettled() {
+    if (!settleWaiters.length) return;
+    const waiters = settleWaiters;
+    settleWaiters = [];
+    waiters.forEach(fn => fn());
+  }
+
+  /**
+   * One fit pass, then release whenSettled() waiters — but only once no
+   * further pass is queued (a queued pass would move the page boxes again
+   * right after they were measured).
+   */
   async function doRefit() {
+    const requestedAtStart = refitRequests;
+    try {
+      await runRefit();
+    } finally {
+      if (!fitting && !pendingRefit && refitRequests === requestedAtStart) {
+        flushSettled();
+      }
+    }
+  }
+
+  async function runRefit() {
     if (fitting) {
       // A refit is already in flight — don't drop this request (dropped
       // requests left stale state after a manual viewport drag): mark it
@@ -612,7 +662,12 @@ const DynamicPage = (() => {
     }
   }
 
+  // Passes requested with scheduleRefit(). Lets doRefit() tell "this was the
+  // last one" from "another pass is queued and would move the boxes again".
+  let refitRequests = 0;
+
   function scheduleRefit() {
+    refitRequests++;
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => { doRefit(); }, RESIZE_DEBOUNCE_MS);
   }
@@ -661,6 +716,7 @@ const DynamicPage = (() => {
   return {
     init,
     refit: scheduleRefit,
+    whenSettled,
     onSurahRendered,
     getFontSize,
     isEnabled,
